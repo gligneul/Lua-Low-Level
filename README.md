@@ -1,4 +1,4 @@
-# Lua-LLVM
+# Lua Low-Level
 Lua JIT using LLVM toolchain
 
 Requires LLVM-3.5
