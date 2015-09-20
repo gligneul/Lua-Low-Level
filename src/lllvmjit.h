@@ -35,11 +35,33 @@
 #ifndef lllvmjit_h
 #define lllvmjit_h
 
-#include "lua.h"
+#include "lstate.h"
 #include "lobject.h"
 
-/* Compiles a function and inserts the code to the jit field */
+#include <llvm-c/Core.h>
+#include <llvm-c/ExecutionEngine.h>
+
+/*
+** Holds all LLVM data that must be attached to the proto
+*/
+typedef struct luaJ_Func {
+  LLVMModuleRef mod;    /* Every function have it's own module. */
+  LLVMValueRef value;
+} luaJ_Func;
+
+/*
+** Global jit information that is attached to the luaState
+*/
+typedef struct luaJ_Engine {
+  LLVMExecutionEngineRef engine;
+  LLVMModuleRef mod;
+} luaJ_Engine;
+
+/* Compiles a function and attach it to the proto */
 LUAI_FUNC void luaJ_compile (lua_State *L, Proto *proto);
+
+LUAI_FUNC void luaJ_freefunc (lua_State *L, luaJ_Func *f);
+LUAI_FUNC void luaJ_freeengine (lua_State *L, luaJ_Engine *e);
 
 #endif
 

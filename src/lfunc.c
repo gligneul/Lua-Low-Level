@@ -16,6 +16,7 @@
 
 #include "lfunc.h"
 #include "lgc.h"
+#include "lllvmjit.h"
 #include "lmem.h"
 #include "lobject.h"
 #include "lstate.h"
@@ -118,6 +119,7 @@ Proto *luaF_newproto (lua_State *L) {
   f->linedefined = 0;
   f->lastlinedefined = 0;
   f->source = NULL;
+  f->llvmfunc = NULL;
   return f;
 }
 
@@ -130,6 +132,7 @@ void luaF_freeproto (lua_State *L, Proto *f) {
   luaM_freearray(L, f->locvars, f->sizelocvars);
   luaM_freearray(L, f->upvalues, f->sizeupvalues);
   luaM_free(L, f);
+  luaJ_freefunc(L, f->llvmfunc);
 }
 
 
