@@ -1,12 +1,12 @@
 /*
-** LLL - Lua Low Level
+** LLL - Lua Low-Level
 ** September, 2015
 ** Author: Gabriel de Quadros Ligneul
 ** Copyright Notice for LLL: see lllvmjit.h
 **
 ** ljitlib.c
 ** This is the runtime lib for LLVM JIT API
-**/
+*/
 
 #define ljitlib_c
 #define LUA_LIB

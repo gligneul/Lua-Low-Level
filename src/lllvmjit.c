@@ -1,9 +1,9 @@
 /*
-** LLL - Lua Low Level
+** LLL - Lua Low-Level
 ** September, 2015
 ** Author: Gabriel de Quadros Ligneul
 ** Copyright Notice for LLL: see lllvmjit.h
-**/
+*/
 
 #define lllvmjit_c
 
@@ -17,43 +17,69 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-static luaJ_Engine *createengine (lua_State *L) {
+
+static LLVMTypeRef createstatetype () {
+    return NULL;
+}
+
+
+static LLVMTypeRef createvaluetype () {
+    return NULL;
+}
+
+
+static void createengine (lua_State *L) {
   luaJ_Engine *e = luaM_new(L, luaJ_Engine);
+  setengine(L, e);
+
   e->mod = LLVMModuleCreateWithName("main");
+
   char *error = NULL;
-  if (!LLVMCreateExecutionEngineForModule(&e->engine, e->mod, &error)) {
+  if (LLVMCreateExecutionEngineForModule(&e->engine, e->mod, &error)) {
     // TODO better error treatment
     fputs(error, stderr);
     exit(1);
   }
-  return e;
+
+  e->statetype = createstatetype();
+  e->valuetype = createvaluetype();
 }
 
-static void compilefunc (lua_State *L, Proto *f) {
-  LLVMModuleRef mod = LLVMModuleCreateWithName("func");
-  f->llvmfunc->mod = mod;
 
-  LLVMTypeRef type = LLVMFunctionType(LLVMInt32Type(), NULL, 0, 0);
+static void createfunc (lua_State *L, Proto *p) {
+  lua_assert(!getfunc(p));
+  luaJ_Func *f = luaM_new(L, luaJ_Func);
+  setfunc(p, f);
+
+  f->mod = LLVMModuleCreateWithName("func");
+
+  luaJ_Engine *e = getengine(L);
+  LLVMTypeRef paramtypes[] = {e->statetype};
+  LLVMTypeRef functype = LLVMFunctionType(LLVMInt32Type(), paramtypes, 1, 0);
+  f->value = LLVMAddFunction(f->mod, "f", functype);
 }
+
 
 LUAI_FUNC void luaJ_compile (lua_State *L, Proto *f) {
-  if (G(L)->llvmengine == NULL)
-    G(L)->llvmengine = createengine(L);
-  lua_assert(f->llvmfunc == NULL);
-  f->llvmfunc = luaM_new(L, luaJ_Func);
-  compilefunc(L, f);
+  if (!hasengine(L))
+    createengine(L);
+  createfunc(L, f);
 }
 
+
+#define returnifnull(o) if ((o) == NULL) return
+
 LUAI_FUNC void luaJ_freefunc (lua_State *L, luaJ_Func* f) {
-  if (f == NULL) return;
+  returnifnull(f);
   LLVMModuleRef mod;
   LLVMRemoveModule(G(L)->llvmengine->engine, f->mod, &mod, NULL);
   LLVMDisposeModule(mod);
   luaM_free(L, f);
 }
 
+
 LUAI_FUNC void luaJ_freeengine (lua_State *L, luaJ_Engine *e) {
-  if (e == NULL) return;
+  returnifnull(e);
   LLVMDisposeExecutionEngine(e->engine);
   luaM_free(L, e);
 }
