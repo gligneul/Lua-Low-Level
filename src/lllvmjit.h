@@ -58,7 +58,10 @@ typedef struct luaJ_Engine {
   LLVMExecutionEngineRef engine;    /* Execution engine for LLVM */
   LLVMModuleRef module;             /* Global module with aux functions */
   LLVMTypeRef t_tvalue;             /* TValue*/
+  LLVMTypeRef t_gcobject;           /* GCValue */
   LLVMTypeRef t_callinfo;           /* CallInfo */
+  LLVMTypeRef t_callinfo_l;         /* CallInfo.u.l */
+  LLVMTypeRef t_callinfo_c;         /* CallInfo.u.c */
   LLVMTypeRef t_state;              /* lua_State */
 } luaJ_Engine;
 
