@@ -46,7 +46,7 @@
 ** Holds all LLVM data that must be attached to the Proto
 */
 typedef struct luaJ_Func {
-  LLVMModuleRef mod;                /* Every function have it's own module. */
+  LLVMModuleRef module;             /* Every function have it's own module. */
   LLVMValueRef value;               /* Pointer to the function */
 } luaJ_Func;
 
@@ -56,24 +56,27 @@ typedef struct luaJ_Func {
 */
 typedef struct luaJ_Engine {
   LLVMExecutionEngineRef engine;    /* Execution engine for LLVM */
-  LLVMModuleRef mod;                /* Global module with aux functions */
-  LLVMTypeRef statetype;            /* LLVM type for lua_State */
-  LLVMTypeRef valuetype;            /* LLVM type for TValue */
+  LLVMModuleRef module;             /* Global module with aux functions */
+  LLVMTypeRef t_tvalue;             /* TValue*/
+  LLVMTypeRef t_callinfo;           /* CallInfo */
+  LLVMTypeRef t_state;              /* lua_State */
 } luaJ_Engine;
 
 
 /*
 ** Useful macros
 */
-#define getengine(L) (G(L)->llvmengine)
-#define setengine(L, e) (G(L)->llvmengine = (e))
-#define hasengine(L) (getengine(L) != NULL)
-#define getfunc(p) ((p)->llvmfunc)
-#define setfunc(p, f) ((p)->llvmfunc = (f))
+#define luaJ_getengine(L)       (G(L)->llvmengine)
+#define luaJ_setengine(L, e)    (G(L)->llvmengine = (e))
+#define luaJ_getfunc(p)         ((p)->llvmfunc)
+#define luaJ_setfunc(p, f)      ((p)->llvmfunc = (f))
 
 
 /* Compiles a function and attach it to the proto */
 LUAI_FUNC void luaJ_compile (lua_State *L, Proto *proto);
+
+/* Executes the LLVM function */
+LUAI_FUNC void luaJ_exec (lua_State *L, Proto* p);
 
 /* Destroys a Func instance */
 LUAI_FUNC void luaJ_freefunc (lua_State *L, luaJ_Func *f);
