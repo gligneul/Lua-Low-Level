@@ -66,6 +66,10 @@ typedef struct luaJ_Engine {
 } luaJ_Engine;
 
 
+/* Optimization level por LLVM's jit compiler */
+#define LLVMOPT 3
+
+
 /*
 ** Useful macros
 */

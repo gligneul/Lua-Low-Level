@@ -174,7 +174,7 @@ static void createengine (lua_State *L) {
   LLVMLinkInJIT();
   LLVMInitializeNativeTarget();
   char *error = NULL;
-  if (LLVMCreateExecutionEngineForModule(&e->engine, e->module, &error)) {
+  if (LLVMCreateJITCompilerForModule(&e->engine, e->module, LLVMOPT, &error)) {
     // TODO better error treatment
     fputs(error, stderr);
     exit(1);
