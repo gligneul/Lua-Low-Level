@@ -123,33 +123,106 @@ static void maket_state (luaJ_Engine *e) {
 
 #define makev_int(n) (LLVMConstInt(LLVMInt32Type(), (n), 1))
 
+#define makev_loadfield(builder, structure, n) \
+            LLVMBuildLoad(builder, makev_getfield(builder, structure, n), "")
+
+static LLVMValueRef makev_getfield (LLVMBuilderRef builder,
+                                    LLVMValueRef structure, int n) {
+  LLVMValueRef indices[] = {makev_int(0), makev_int(n)};
+  return LLVMBuildGEP(builder, structure, indices, 2, "");
+}
+
+static LLVMValueRef makev_base (LLVMBuilderRef builder, LLVMValueRef ci,
+                                LLVMTypeRef t_ci_l) {
+  LLVMValueRef ci_u = makev_getfield(builder, ci, 4);
+  LLVMValueRef ci_l = LLVMBuildBitCast(builder, ci_u, t_ci_l, "");
+  return makev_loadfield(builder, ci_l, 0);
+}
+ 
+#if 1
 static LLVMValueRef makev_printf (LLVMModuleRef module) {
   LLVMTypeRef pf_params[] = {maket_str()};
   LLVMTypeRef pf_type = LLVMFunctionType(LLVMInt32Type(), pf_params, 1, 1);
   return LLVMAddFunction(module, "printf", pf_type);
 }
+#endif
+
 
 /*
 ** Compiles the bytecode into LLVM IR
 */
 
-static void compilefunc (luaJ_Engine *e, luaJ_Func *f) {
+#if 0
+static void connectblocks (LLVMBuilderRef builder, LLVMBasicBlockRef last,
+                           LLVMBasicBlockRef current) {
+  if (LLVMGetBasicBlockTerminator(last) == NULL) {
+    LLVMPositionBuilderAtEnd(builder, last);
+    LLVMBuildBr(builder, current);
+  }
+}
+#endif
+
+static void compilefunc (luaJ_Engine *e, Proto *p) {
 
   (void)e;
 
+  luaJ_Func *f = luaJ_getfunc(p);
   LLVMBuilderRef builder = LLVMCreateBuilder();
-  LLVMBasicBlockRef entry = LLVMAppendBasicBlock(f->value, "entry");
-  LLVMPositionBuilderAtEnd(builder, entry);
+  LLVMBasicBlockRef block = LLVMAppendBasicBlock(f->value, "entry");
+  LLVMPositionBuilderAtEnd(builder, block);
 
-  makev_printf(f->module);
+  LLVMValueRef v_state = LLVMGetParam(f->value, 0);
+  LLVMValueRef v_ci = makev_loadfield(builder, v_state, 6);
+  LLVMValueRef v_base = makev_base(builder, v_ci, e->t_callinfo_l);
+
+  /* Print base value: */
+  LLVMValueRef v_printf = makev_printf(f->module);
+  LLVMValueRef params[] = {
+    LLVMBuildPointerCast(
+      builder, LLVMBuildGlobalString(builder, "JIT: base = %p\n", ""),
+      maket_str(), ""),
+    v_base
+  };
+  LLVMBuildCall(builder, v_printf, params, 2, "");
 
 #if 0
-  LLVMValueRef indices[] = {makev_int(0), makev_int(0)};
-  LLVMValueRef v1 = LLVMBuildGEP(builder, v_state, indices, 2, "");
-  LLVMValueRef v2 = LLVMBuildLoad(builder, v1, "");
-  LLVMValueRef params[] = {v2};
-  LLVMBuildCall(builder, v_printf, params, 1, "");
+#define checkliveness(g,obj) \
+	lua_longassert(!iscollectable(obj) || \
+			(righttt(obj) && !isdead(g,gcvalue(obj))))
+
+#define setobj(L,obj1,obj2) \
+	{ TValue *io1=(obj1); *io1 = *(obj2); \
+	  (void)L; checkliveness(G(L),io1); }
+
+#define RA(i)	(base+GETARG_A(i))
+#define RB(i)	check_exp(getBMode(GET_OPCODE(i)) == OpArgR, base+GETARG_B(i))
 #endif
+
+
+  for (int i = 0; i < p->sizecode; ++i) {
+#if 0
+    LLVMBasicBlockRef last_block = block;
+    block = LLVMAppendBasicBlock(f->value, "");
+    connectblocks(builder, last_block, block);
+#endif
+    LLVMPositionBuilderAtEnd(builder, block);
+    
+#if 0
+    Instruction instruction = p->code[i];
+
+    switch (GET_OPCODE(instruction)) {
+      case OP_MOVE:
+        LLVMValueRef rb = makev_rb(
+        setobjs2s(L, ra, RB(i));
+
+        break;
+      default:
+        fprintf(stderr, "Can't compile opcode: %s\n",
+            luaP_opnames[GET_OPCODE(instruction)]);
+        exit(1);
+    }
+#endif
+  }
 
   LLVMBuildRet(builder, makev_int(0));
   LLVMDisposeBuilder(builder);
@@ -199,7 +272,7 @@ static void createfunc (lua_State *L, Proto *p) {
   LLVMTypeRef functype = LLVMFunctionType(LLVMInt32Type(), paramtypes, 1, 0);
   f->value = LLVMAddFunction(f->module, "", functype);
 
-  compilefunc(e, f);
+  compilefunc(e, p);
 
   LLVMAddModule(e->engine, f->module);
 }
@@ -216,6 +289,8 @@ LUAI_FUNC void luaJ_compile (lua_State *L, Proto *p) {
 }
 
 LUAI_FUNC void luaJ_exec (lua_State *L, Proto* p) {
+  printf("LUA: base = %p\n", L->ci->u.l.base);
+
   LLVMExecutionEngineRef engine = luaJ_getengine(L)->engine;
   LLVMValueRef function = luaJ_getfunc(p)->value;
   LLVMGenericValueRef args[] = {LLVMCreateGenericValueOfPointer(L)};

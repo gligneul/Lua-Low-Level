@@ -77,7 +77,8 @@ typedef struct luaJ_Engine {
 #define luaJ_setengine(L, e)    (G(L)->llvmengine = (e))
 #define luaJ_getfunc(p)         ((p)->llvmfunc)
 #define luaJ_setfunc(p, f)      ((p)->llvmfunc = (f))
-
+#define luaJ_hasfunc(o) \
+            (ttisclosure(o) && luaJ_getfunc(getproto(o)) != NULL)
 
 /* Compiles a function and attach it to the proto */
 LUAI_FUNC void luaJ_compile (lua_State *L, Proto *proto);
