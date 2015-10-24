@@ -406,12 +406,6 @@ typedef struct LocVar {
 
 
 /*
-** Foward declaration of LLVM Value, used by Jit.
-** Declared at lllvmjit.h
-*/
-struct luaJ_Func;
-
-/*
 ** Function Prototypes
 */
 typedef struct Proto {
@@ -436,7 +430,6 @@ typedef struct Proto {
   struct LClosure *cache;  /* last-created closure with this prototype */
   TString  *source;  /* used for debug information */
   GCObject *gclist;
-  struct luaJ_Func *llvmfunc;
 } Proto;
 
 

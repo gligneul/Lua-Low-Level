@@ -104,12 +104,6 @@ typedef struct CallInfo {
 
 
 /*
-** Foward declaration of LLVM Jit engine
-*/
-struct luaJ_Engine;
-
-
-/*
 ** 'global state', shared by all threads of this state
 */
 typedef struct global_State {
@@ -148,7 +142,6 @@ typedef struct global_State {
   TString *tmname[TM_N];  /* array with tag-method names */
   struct Table *mt[LUA_NUMTAGS];  /* metatables for basic types */
   TString *strcache[STRCACHE_SIZE][1];  /* cache for strings in API */
-  struct luaJ_Engine *llvmengine;
 } global_State;
 
 
