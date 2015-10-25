@@ -2,11 +2,35 @@
 ** LLL - Lua Low-Level
 ** September, 2015
 ** Author: Gabriel de Quadros Ligneul
-** Copyright Notice for LLL: see bellow
+** Copyright Notice for LLL: eof
 **
 ** llvmjit.h
 ** This is the interface for jit compiling Lua bytecode into LLVM IR
 */
+
+#ifndef lllvmjit_h
+#define lllvmjit_h
+
+#include "lstate.h"
+#include "lobject.h"
+
+/* Holds all jit data of a function */
+typedef struct luaJ_Function luaJ_Function;
+
+/* Optimization level for LLVM's jit compiler */
+#define LUAJ_LLVMOPT 3
+
+/* Compiles a function */
+LUAI_FUNC luaJ_Function *luaJ_compile (lua_State *L, StkId closure);
+
+/* Executes the LLVM function */
+LUAI_FUNC void luaJ_call (lua_State *L, luaJ_Function *f);
+
+/* Dumps the LLMV function (debug) */
+LUAI_FUNC void luaJ_dump (lua_State *L, luaJ_Function *f);
+
+/* Destroys a Func instance */
+LUAI_FUNC void luaJ_freefunction (lua_State *L, luaJ_Function *f);
 
 /*
 ** The MIT License (MIT)
@@ -31,66 +55,6 @@
 ** OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ** SOFTWARE.
 */
-
-#ifndef lllvmjit_h
-#define lllvmjit_h
-
-#include "lstate.h"
-#include "lobject.h"
-
-#include <llvm-c/Core.h>
-#include <llvm-c/ExecutionEngine.h>
-
-
-/*
-** Holds all LLVM data that must be attached to the Proto
-*/
-typedef struct luaJ_Func {
-  LLVMModuleRef module;             /* Every function have it's own module. */
-  LLVMValueRef value;               /* Pointer to the function */
-} luaJ_Func;
-
-
-/*
-** Global information that is attached to the lua_State
-*/
-typedef struct luaJ_Engine {
-  LLVMExecutionEngineRef engine;    /* Execution engine for LLVM */
-  LLVMModuleRef module;             /* Global module with aux functions */
-  LLVMTypeRef t_tvalue;             /* TValue*/
-  LLVMTypeRef t_gcobject;           /* GCValue */
-  LLVMTypeRef t_callinfo;           /* CallInfo */
-  LLVMTypeRef t_callinfo_l;         /* CallInfo.u.l */
-  LLVMTypeRef t_callinfo_c;         /* CallInfo.u.c */
-  LLVMTypeRef t_state;              /* lua_State */
-} luaJ_Engine;
-
-
-/* Optimization level por LLVM's jit compiler */
-#define LLVMOPT 3
-
-
-/*
-** Useful macros
-*/
-#define luaJ_getengine(L)       (G(L)->llvmengine)
-#define luaJ_setengine(L, e)    (G(L)->llvmengine = (e))
-#define luaJ_getfunc(p)         ((p)->llvmfunc)
-#define luaJ_setfunc(p, f)      ((p)->llvmfunc = (f))
-#define luaJ_hasfunc(o) \
-            (ttisclosure(o) && luaJ_getfunc(getproto(o)) != NULL)
-
-/* Compiles a function and attach it to the proto */
-LUAI_FUNC void luaJ_compile (lua_State *L, Proto *proto);
-
-/* Executes the LLVM function */
-LUAI_FUNC void luaJ_exec (lua_State *L, Proto* p);
-
-/* Destroys a Func instance */
-LUAI_FUNC void luaJ_freefunc (lua_State *L, luaJ_Func *f);
-
-/* Destroys an Engine instance */
-LUAI_FUNC void luaJ_freeengine (lua_State *L, luaJ_Engine *e);
 
 #endif
 

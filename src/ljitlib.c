@@ -19,55 +19,70 @@
 #include "lstate.h"
 #include "lllvmjit.h"
 #include "lobject.h"
-#include "luaconf.h"
 #include "lualib.h"
 
-static Proto *checkluafunc(lua_State *L, int n) {
+/*
+** Auxiliary functions
+*/
+
+static StkId getclosure (lua_State *L, int n) {
   luaL_checktype(L, n, LUA_TFUNCTION);
-
-  TValue *f = L->ci->func + n;
-  if (!ttisclosure(f))
-    luaL_error(L, "must be a Lua function");
-  return getproto(f);
+  StkId o = L->ci->func + n;
+  if (!ttisLclosure(o))
+    luaL_error(L, "#1 must be a Lua function");
+  return o;
 }
 
+#define getfunction(L, n) \
+  *(luaJ_Function **)luaL_checkudata(L, n, "jit.Function")
+
+
 /*
-** Calls the luaJ_compile function
+** API functions
 */
+
 static int jit_compile (lua_State *L) {
-  luaJ_compile(L, checkluafunc(L, 1));
+  luaJ_Function **f =
+    (luaJ_Function **)lua_newuserdata(L, sizeof(luaJ_Function *));
+  *f = luaJ_compile(L, getclosure(L, 1));
+  luaL_getmetatable(L, "jit.Function");
+  lua_setmetatable(L, -2); 
+  return 1;
+}
+
+static int jit_call (lua_State *L) {
+  luaJ_call(L, getfunction(L, 1));
   return 0;
 }
 
-/*
-** Dumps the module in stderr
-*/
+static int jit_gc (lua_State *L) {
+  luaJ_freefunction(L, getfunction(L, 1));
+  return 0;
+}
+
 static int jit_dump (lua_State *L) {
-  Proto *p = checkluafunc(L, 1);
-  LLVMDumpModule(luaJ_getfunc(p)->module);
+  luaJ_dump(L, getfunction(L, 1));
   return 0;
 }
 
-/*
-** Executes the llvm function
-*/
-static int jit_exec (lua_State *L) {
-  luaJ_exec(L, checkluafunc(L, 1));
-  return 0;
-}
-
-/*
-** functions for 'jit' library
-*/
-static const luaL_Reg jitlib[] = {
+static const luaL_Reg jitlib_f[] = {
   {"compile", jit_compile},
+  {NULL, NULL}
+};
+
+static const luaL_Reg jitlib_m[] = {
+  {"__call", jit_call},
+  {"__gc", jit_gc},
   {"dump", jit_dump},
-  {"exec", jit_exec},
   {NULL, NULL}
 };
 
 LUAMOD_API int luaopen_jit (lua_State *L) {
-  luaL_newlib(L, jitlib);
+  luaL_newmetatable(L, "jit.Function");
+  lua_pushvalue(L, -1);
+  lua_setfield(L, -2, "__index");
+  luaL_setfuncs(L, jitlib_m, 0);
+  luaL_newlib(L, jitlib_f);
   return 1;
 }
 
