@@ -1,9 +1,9 @@
-print("> function f() end")
-function f() end
+print("> function luafoo() return 123 end")
+function luafoo() return 123 end
 
-print("> jit.compile(f)")
-jit.compile(f)
+print("> jitfoo = jit.compile(luafoo)")
+jitfoo = jit.compile(luafoo)
 
-print("> jit.dump(f)")
-jit.dump(f)
+print("> jitfoo:dump()")
+jitfoo:dump()
 

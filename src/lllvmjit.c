@@ -192,7 +192,7 @@ static void connectblocks (LLVMBuilderRef builder, LLVMBasicBlockRef last,
 
 static void compilefunction (luaJ_Jit *Jit, luaJ_Function *f, StkId closure) {
   (void)closure;
-#if 0
+
   LLVMBuilderRef builder = LLVMCreateBuilder();
   LLVMBasicBlockRef block = LLVMAppendBasicBlock(f->value, "entry");
   LLVMPositionBuilderAtEnd(builder, block);
@@ -225,15 +225,13 @@ static void compilefunction (luaJ_Jit *Jit, luaJ_Function *f, StkId closure) {
 #endif
 
 
-  for (int i = 0; i < p->sizecode; ++i) {
 #if 0
+  for (int i = 0; i < p->sizecode; ++i) {
     LLVMBasicBlockRef last_block = block;
     block = LLVMAppendBasicBlock(f->value, "");
     connectblocks(builder, last_block, block);
-#endif
     LLVMPositionBuilderAtEnd(builder, block);
     
-#if 0
     Instruction instruction = p->code[i];
 
     switch (GET_OPCODE(instruction)) {
@@ -247,8 +245,9 @@ static void compilefunction (luaJ_Jit *Jit, luaJ_Function *f, StkId closure) {
             luaP_opnames[GET_OPCODE(instruction)]);
         exit(1);
     }
-#endif
   }
+
+#endif
 
   LLVMBuildRet(builder, makev_int(0));
   LLVMDisposeBuilder(builder);
@@ -258,8 +257,6 @@ static void compilefunction (luaJ_Jit *Jit, luaJ_Function *f, StkId closure) {
   LLVMVerifyModule(f->module, LLVMPrintMessageAction, &error);
   LLVMDisposeMessage(error);
 
-
-#endif
   LLVMAddModule(Jit->engine, f->module);
 }
 
@@ -310,17 +307,9 @@ LUAI_FUNC luaJ_Function *luaJ_compile (lua_State *L, StkId closure) {
 }
 
 LUAI_FUNC void luaJ_call (lua_State *L, luaJ_Function *f) {
-  (void)L;
-  (void)f;
-  puts("luaJ_exec");
-
-  #if 0
   printf("LUA: base = %p\n", L->ci->u.l.base);
-  LLVMExecutionEngineRef engine = luaJ_getengine(L)->engine;
-  LLVMValueRef function = luaJ_getfunc(p)->value;
   LLVMGenericValueRef args[] = {LLVMCreateGenericValueOfPointer(L)};
-  LLVMRunFunction(engine, function, 1, args);
-  #endif
+  LLVMRunFunction(Jit->engine, f->value, 1, args);
 }
 
 LUAI_FUNC void luaJ_dump (lua_State *L, luaJ_Function *f) {
