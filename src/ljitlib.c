@@ -51,8 +51,7 @@ static int jit_compile (lua_State *L) {
 }
 
 static int jit_call (lua_State *L) {
-  luaJ_call(L, getfunction(L, 1));
-  return 0;
+  return luaJ_call(L, getfunction(L, 1));
 }
 
 static int jit_gc (lua_State *L) {

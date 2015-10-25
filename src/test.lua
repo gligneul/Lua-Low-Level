@@ -7,3 +7,6 @@ jitfoo = jit.compile(luafoo)
 print("> jitfoo:dump()")
 jitfoo:dump()
 
+print("> jitfoo()")
+jitfoo()
+

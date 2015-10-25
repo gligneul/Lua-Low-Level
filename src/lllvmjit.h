@@ -23,8 +23,8 @@ typedef struct luaJ_Function luaJ_Function;
 /* Compiles a function */
 LUAI_FUNC luaJ_Function *luaJ_compile (lua_State *L, StkId closure);
 
-/* Executes the LLVM function */
-LUAI_FUNC void luaJ_call (lua_State *L, luaJ_Function *f);
+/* Executes the LLVM function; Returns the number of results */
+LUAI_FUNC int luaJ_call (lua_State *L, luaJ_Function *f);
 
 /* Dumps the LLMV function (debug) */
 LUAI_FUNC void luaJ_dump (lua_State *L, luaJ_Function *f);

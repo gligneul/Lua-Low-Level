@@ -306,10 +306,10 @@ LUAI_FUNC luaJ_Function *luaJ_compile (lua_State *L, StkId closure) {
   return f;
 }
 
-LUAI_FUNC void luaJ_call (lua_State *L, luaJ_Function *f) {
-  printf("LUA: base = %p\n", L->ci->u.l.base);
+LUAI_FUNC int luaJ_call (lua_State *L, luaJ_Function *f) {
   LLVMGenericValueRef args[] = {LLVMCreateGenericValueOfPointer(L)};
-  LLVMRunFunction(Jit->engine, f->value, 1, args);
+  LLVMGenericValueRef result = LLVMRunFunction(Jit->engine, f->value, 1, args);
+  return LLVMGenericValueToInt(result, 0);
 }
 
 LUAI_FUNC void luaJ_dump (lua_State *L, luaJ_Function *f) {
