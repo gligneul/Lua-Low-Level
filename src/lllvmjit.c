@@ -23,18 +23,17 @@
 #include <stdlib.h>
 
 /*
-** Holds all jit data of a function
+** Type definitions
 */
-struct luaJ_Function {
+struct luaJ_Function
+{
   LLVMModuleRef module;             /* Every function have it's own module. */
   LLVMValueRef value;               /* Pointer to the function */
+  LClosure *closure;                 /* Lua closure */
 };
 
-
-/*
-** Global jit data
-*/
-typedef struct luaJ_Jit {
+typedef struct luaJ_Jit
+{
   LLVMExecutionEngineRef engine;    /* Execution engine for LLVM */
   LLVMModuleRef module;             /* Global module with aux functions */
   LLVMTypeRef t_tvalue;             /* TValue*/
@@ -44,12 +43,19 @@ typedef struct luaJ_Jit {
   LLVMTypeRef t_callinfo_c;         /* CallInfo.u.c */
   LLVMTypeRef t_state;              /* lua_State */
 } luaJ_Jit;
-
-
-/*
-** Global data
-*/
 static luaJ_Jit *Jit = NULL;
+
+typedef struct luaJ_CompileState
+{
+  luaJ_Jit *Jit;
+  luaJ_Function *f;
+  Proto *proto;
+  LLVMBuilderRef builder;
+  LLVMValueRef v_state;
+  LLVMValueRef v_ci;
+  Instruction instr;
+  LLVMBasicBlockRef block;
+} luaJ_CompileState;
 
 
 /*
@@ -68,7 +74,8 @@ static luaJ_Jit *Jit = NULL;
             (maket_sizeof(lu_byte)),    /* 1. lu_byte tt; */ \
             (maket_sizeof(lu_byte))     /* 2. lu_byte marked */
 
-static void maket_tvalue (luaJ_Jit *Jit) {
+static void maket_tvalue (luaJ_Jit *Jit)
+{
   LLVMTypeRef value = maket_struct("TValue");
   Jit->t_tvalue = maket_ptr(value);
   LLVMTypeRef value_elements[] = {
@@ -83,7 +90,8 @@ static void maket_tvalue (luaJ_Jit *Jit) {
   LLVMStructSetBody(gcobject, gcobject_elements, 3, 0);
 }
 
-static void maket_callinfo (luaJ_Jit *Jit) {
+static void maket_callinfo (luaJ_Jit *Jit)
+{
   LLVMTypeRef callinfo_l = maket_struct("CallInfo.l");
   Jit->t_callinfo_l = maket_ptr(callinfo_l);
   LLVMTypeRef callinfo_l_elements[] = {
@@ -116,25 +124,26 @@ static void maket_callinfo (luaJ_Jit *Jit) {
   LLVMStructSetBody(callinfo, elements, 8, 0);
 }
 
-static void maket_state (luaJ_Jit *Jit) {
+static void maket_state (luaJ_Jit *Jit)
+{
   LLVMTypeRef globalstate = maket_struct("global_State");
 
   LLVMTypeRef state = maket_struct("lua_State");
   Jit->t_state = maket_ptr(state);
   LLVMTypeRef state_elements[] = {
-    maket_gccommonheader(Jit->t_gcobject),    /* 0-2: CommonHeader; */
+    maket_gccommonheader(Jit->t_gcobject),  /* 0-2: CommonHeader; */
     maket_sizeof(lu_byte),                  /* 3. lu_byte status; */
-    Jit->t_tvalue,                            /* 4. StkId top; */
+    Jit->t_tvalue,                          /* 4. StkId top; */
     maket_ptr(globalstate),                 /* 5. global_State *l_G; */
-    Jit->t_callinfo,                          /* 6. CallInfo *ci; */
+    Jit->t_callinfo,                        /* 6. CallInfo *ci; */
     maket_ptr(maket_sizeof(Instruction)),   /* 7. const Instruction *oldpc; */
-    Jit->t_tvalue,                            /* 8. StkId stack_last; */
-    Jit->t_tvalue,                            /* 9. StkId stack; */
+    Jit->t_tvalue,                          /* 8. StkId stack_last; */
+    Jit->t_tvalue,                          /* 9. StkId stack; */
     maket_ptr(maket_sizeof(UpVal)),         /* 10. UpVal *openupval; */
-    Jit->t_gcobject,                          /* 11. GCObject *gclist; */
-    Jit->t_state,                             /* 12. struct lua_State *twups; */
+    Jit->t_gcobject,                        /* 11. GCObject *gclist; */
+    Jit->t_state,                           /* 12. struct lua_State *twups; */
     maket_sizeof(struct lua_longjmp*),      /* 13. struct lua_longjmp *err... */
-    LLVMGetElementType(Jit->t_callinfo),      /* 14. CallInfo base_ci; */
+    LLVMGetElementType(Jit->t_callinfo),    /* 14. CallInfo base_ci; */
     maket_sizeof(lua_Hook),                 /* 15. lua_Hook hook; */
     maket_sizeof(ptrdiff_t),                /* 16. ptrdiff_t errfunc; */
     maket_sizeof(int),                      /* 17. int stacksize; */
@@ -149,123 +158,178 @@ static void maket_state (luaJ_Jit *Jit) {
 }
 
 
+
 /*
 ** Macros and functions for creating LLVM values
 */
 
 #define makev_int(n) (LLVMConstInt(LLVMInt32Type(), (n), 1))
+#define makev_intptr(n) (LLVMConstInt(maket_sizeof(void *), (n), 1))
 
 #define makev_loadfield(builder, structure, n) \
             LLVMBuildLoad(builder, makev_getfield(builder, structure, n), "")
 
+#define makev_string(builder, str) \
+            LLVMBuildPointerCast(builder, \
+                LLVMBuildGlobalString(builder, str, ""), maket_str(), "")
+
+static LLVMValueRef makev_register (LLVMBuilderRef builder, LLVMValueRef v_func,
+                                    int reg)
+{
+  LLVMValueRef indices[] = {makev_int(1 + reg)};
+  return LLVMBuildGEP(builder, v_func, indices, 1, "");
+}
+
+static LLVMValueRef makev_kvalue (LLVMBuilderRef builder, TValue *value,
+                                  luaJ_Jit *Jit)
+{
+  LLVMValueRef v_int = LLVMConstInt(maket_sizeof(TValue *),
+    (uintptr_t)value, 0);
+  return LLVMBuildIntToPtr(builder, v_int, Jit->t_tvalue, "");
+}
+
 static LLVMValueRef makev_getfield (LLVMBuilderRef builder,
-                                    LLVMValueRef structure, int n) {
+                                    LLVMValueRef structure, int n)
+{
   LLVMValueRef indices[] = {makev_int(0), makev_int(n)};
   return LLVMBuildGEP(builder, structure, indices, 2, "");
 }
 
-static LLVMValueRef makev_base (LLVMBuilderRef builder, LLVMValueRef ci,
-                                LLVMTypeRef t_ci_l) {
-  LLVMValueRef ci_u = makev_getfield(builder, ci, 4);
-  LLVMValueRef ci_l = LLVMBuildBitCast(builder, ci_u, t_ci_l, "");
-  return makev_loadfield(builder, ci_l, 0);
-}
- 
-static LLVMValueRef makev_printf (LLVMModuleRef module) {
+static LLVMValueRef makev_printf (LLVMModuleRef module)
+{
   LLVMTypeRef pf_params[] = {maket_str()};
   LLVMTypeRef pf_type = LLVMFunctionType(LLVMInt32Type(), pf_params, 1, 1);
   return LLVMAddFunction(module, "printf", pf_type);
 }
 
 
+
 /*
 ** Compiles the bytecode into LLVM IR
 */
 
-static void connectblocks (LLVMBuilderRef builder, LLVMBasicBlockRef last,
-                           LLVMBasicBlockRef current) {
-  if (LLVMGetBasicBlockTerminator(last) == NULL) {
-    LLVMPositionBuilderAtEnd(builder, last);
-    LLVMBuildBr(builder, current);
+static void createblocks (luaJ_CompileState *cs, LLVMBasicBlockRef *blocks)
+{
+  LLVMBasicBlockRef entry = LLVMAppendBasicBlock(cs->f->value, "bblock.entry");
+  LLVMPositionBuilderAtEnd(cs->builder, entry);
+  cs->v_state = LLVMGetParam(cs->f->value, 0);
+  cs->v_ci = makev_loadfield(cs->builder, cs->v_state, 6);
+
+  int nblocks = cs->proto->sizecode;
+  for (int i = 0; i < nblocks; ++i) {
+    char name[128];
+    const char *instr = luaP_opnames[GET_OPCODE(cs->proto->code[i])];
+    sprintf(name, "bblock.%d.%s", i, instr);
+    blocks[i] = LLVMAppendBasicBlock(cs->f->value, name);
   }
+
+  LLVMBuildBr(cs->builder, blocks[0]);
 }
 
-static void compilefunction (luaJ_Jit *Jit, luaJ_Function *f, StkId closure) {
-  (void)closure;
+static void setregister (LLVMBuilderRef builder, LLVMValueRef reg,
+                         LLVMValueRef value)
+{
+  LLVMValueRef value_iptr =
+      LLVMBuildBitCast(builder, value, maket_ptr(maket_sizeof(TValue)), "");
+  LLVMDumpValue(value_iptr);
+  LLVMValueRef value_i = LLVMBuildLoad(builder, value_iptr, "");
+  LLVMValueRef reg_iptr =
+      LLVMBuildBitCast(builder, reg, maket_ptr(maket_sizeof(TValue)), "");
+  LLVMBuildStore(builder, value_i, reg_iptr);
+}
 
-  LLVMBuilderRef builder = LLVMCreateBuilder();
-  LLVMBasicBlockRef block = LLVMAppendBasicBlock(f->value, "entry");
-  LLVMPositionBuilderAtEnd(builder, block);
+static void settop (LLVMBuilderRef builder, LLVMValueRef v_state,
+                    LLVMValueRef v_ci, int offset)
+{
+  LLVMValueRef v_func = makev_loadfield(builder, v_ci, 0);
+  LLVMValueRef v_reg = makev_register(builder, v_func, offset);
+  LLVMValueRef v_top = makev_getfield(builder, v_state, 4);
+  LLVMBuildStore(builder, v_reg, v_top);
+}
 
-  LLVMValueRef v_state = LLVMGetParam(f->value, 0);
-  LLVMValueRef v_ci = makev_loadfield(builder, v_state, 6);
-  LLVMValueRef v_base = makev_base(builder, v_ci, Jit->t_callinfo_l);
+static void compile_move (luaJ_CompileState *cs)
+{
+  int a = GETARG_A(cs->instr);
+  int b = GETARG_B(cs->instr);
+  LLVMValueRef v_func = makev_loadfield(cs->builder, cs->v_ci, 0);
+  LLVMValueRef v_ra = makev_register(cs->builder, v_func, a);
+  LLVMValueRef v_rb = makev_register(cs->builder, v_func, b);
+  setregister(cs->builder, v_ra, v_rb);
+}
 
-  /* Print base value: */
-  LLVMValueRef v_printf = makev_printf(f->module);
-  LLVMValueRef params[] = {
-    LLVMBuildPointerCast(
-      builder, LLVMBuildGlobalString(builder, "JIT: base = %p\n", ""),
-      maket_str(), ""),
-    v_base
-  };
-  LLVMBuildCall(builder, v_printf, params, 2, "");
+static void compile_loadk (luaJ_CompileState *cs)
+{
+  int a = GETARG_A(cs->instr);
+  LLVMValueRef v_func = makev_loadfield(cs->builder, cs->v_ci, 0);
+  LLVMValueRef v_ra = makev_register(cs->builder, v_func, a);
+  TValue *rb = cs->proto->k + GETARG_Bx(cs->instr);
+  LLVMValueRef v_rb = makev_kvalue(cs->builder, rb, cs->Jit);
+  setregister(cs->builder, v_ra, v_rb);
+}
 
-#if 0
-#define checkliveness(g,obj) \
-	lua_longassert(!iscollectable(obj) || \
-			(righttt(obj) && !isdead(g,gcvalue(obj))))
+static void compile_return (luaJ_CompileState *cs)
+{
+  int b = GETARG_B(cs->instr);
+  int nresults;
+  if (b == 1) {
+    nresults = 0;
+  } else {
+    nresults = b - 1;
+    int a = GETARG_A(cs->instr);
+    settop(cs->builder, cs->v_state, cs->v_ci, a + nresults);
+  }
+  LLVMBuildRet(cs->builder, makev_int(nresults));
+}
 
-#define setobj(L,obj1,obj2) \
-	{ TValue *io1=(obj1); *io1 = *(obj2); \
-	  (void)L; checkliveness(G(L),io1); }
+static void compile (luaJ_Jit *Jit, luaJ_Function *f)
+{
+  luaJ_CompileState cs;
+  cs.Jit = Jit;
+  cs.f = f;
+  cs.proto = f->closure->p;
+  cs.builder = LLVMCreateBuilder();
 
-#define RA(i)	(base+GETARG_A(i))
-#define RB(i)	check_exp(getBMode(GET_OPCODE(i)) == OpArgR, base+GETARG_B(i))
-#endif
+  LLVMBasicBlockRef blocks[cs.proto->sizecode];
+  createblocks(&cs, blocks);
 
+  for (int i = 0; i < cs.proto->sizecode; ++i) {
+    cs.instr = cs.proto->code[i];
+    cs.block = blocks[i];
+    LLVMPositionBuilderAtEnd(cs.builder, cs.block);
 
-#if 0
-  for (int i = 0; i < p->sizecode; ++i) {
-    LLVMBasicBlockRef last_block = block;
-    block = LLVMAppendBasicBlock(f->value, "");
-    connectblocks(builder, last_block, block);
-    LLVMPositionBuilderAtEnd(builder, block);
-    
-    Instruction instruction = p->code[i];
-
-    switch (GET_OPCODE(instruction)) {
-      case OP_MOVE:
-        LLVMValueRef rb = makev_rb(
-        setobjs2s(L, ra, RB(i));
-
-        break;
-      default:
-        fprintf(stderr, "Can't compile opcode: %s\n",
-            luaP_opnames[GET_OPCODE(instruction)]);
-        exit(1);
+    switch (GET_OPCODE(cs.instr)) {
+      case OP_MOVE:     compile_move(&cs); break;
+      case OP_LOADK:    compile_loadk(&cs); break;
+      case OP_RETURN:   compile_return(&cs); break;
+      default: break;
     }
+
+    if (LLVMGetBasicBlockTerminator(cs.block) == NULL)
+      LLVMBuildBr(cs.builder, blocks[i + 1]);
   }
 
-#endif
+  LLVMDisposeBuilder(cs.builder);
 
-  LLVMBuildRet(builder, makev_int(0));
-  LLVMDisposeBuilder(builder);
-
-  // TODO better error treatment
   char *error = NULL;
-  LLVMVerifyModule(f->module, LLVMPrintMessageAction, &error);
-  LLVMDisposeMessage(error);
+  if (LLVMVerifyModule(f->module, LLVMReturnStatusAction, &error)) {
+    fprintf(stderr, "\n>>>>> MODULE\n");
+    LLVMDumpModule(f->module);
+    fprintf(stderr, "\n>>>>> ERROR\n");
+    LLVMDisposeMessage(error);
+    exit(1);
+  }
 
   LLVMAddModule(Jit->engine, f->module);
 }
+
 
 
 /*
 ** Other auxiliary functions
 */
 
-static void initJit (lua_State *L) {
+static void initJit (lua_State *L)
+{
   Jit = luaM_new(L, luaJ_Jit);
   Jit->module = LLVMModuleCreateWithName("main");
   LLVMLinkInJIT();
@@ -282,42 +346,65 @@ static void initJit (lua_State *L) {
   maket_state(Jit);
 }
 
+static void precall (lua_State *L, luaJ_Function *f)
+{
+  Proto *proto = f->closure->p;
+  StkId args = L->ci->func + 1;
+  int in = L->top - args- 1;
+  int expected = proto->numparams;
+
+  // Remove first arg (userdata luaJ_Function)
+  for (int i = 0; i < in; ++i)
+    setobj2s(L, args + i, args + i + 1);
+
+  // Fill missing args with nil
+  for (int i = in; i < expected; ++i)
+    setnilvalue(args + i);
+}
+
+
 
 /*
 ** API implementation
 */
 
-LUAI_FUNC luaJ_Function *luaJ_compile (lua_State *L, StkId closure) {
+LUAI_FUNC luaJ_Function *luaJ_compile (lua_State *L, StkId closure)
+{
   if (!Jit) initJit(L);
 
   luaJ_Function *f = luaM_new(L, luaJ_Function);
 
-  /* Creates the module */
+  // Creates the module
   char modulename[16];
   sprintf(modulename, "f%p", closure);
   f->module = LLVMModuleCreateWithName(modulename);
 
-  /* Creates the LLVM function */
+  // Creates the LLVM function
   LLVMTypeRef paramtypes[] = {Jit->t_state};
   LLVMTypeRef functype = LLVMFunctionType(LLVMInt32Type(), paramtypes, 1, 0);
   f->value = LLVMAddFunction(f->module, "", functype);
+  f->closure = clLvalue(closure);
 
-  compilefunction(Jit, f, closure);
+  compile(Jit, f);
   return f;
 }
 
-LUAI_FUNC int luaJ_call (lua_State *L, luaJ_Function *f) {
+LUAI_FUNC int luaJ_call (lua_State *L, luaJ_Function *f)
+{
+  precall(L, f);
   LLVMGenericValueRef args[] = {LLVMCreateGenericValueOfPointer(L)};
   LLVMGenericValueRef result = LLVMRunFunction(Jit->engine, f->value, 1, args);
   return LLVMGenericValueToInt(result, 0);
 }
 
-LUAI_FUNC void luaJ_dump (lua_State *L, luaJ_Function *f) {
+LUAI_FUNC void luaJ_dump (lua_State *L, luaJ_Function *f)
+{
   (void)L;
   LLVMDumpModule(f->module);
 }
 
-LUAI_FUNC void luaJ_freefunction (lua_State *L, luaJ_Function *f) {
+LUAI_FUNC void luaJ_freefunction (lua_State *L, luaJ_Function *f)
+{
   if (f) {
     LLVMModuleRef module;
     LLVMRemoveModule(Jit->engine, f->module, &module, NULL);
