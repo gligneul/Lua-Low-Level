@@ -58,7 +58,9 @@ typedef struct luaJ_CompileState
   LLVMValueRef v_func;          /* base = func + 1 */
   Instruction instr;            /* current instruction */
   LLVMBasicBlockRef block;      /* current block */
-  LLVMValueRef rt_arith_rr;     /* runtime_arith() */
+  struct {                      /* runtime functions */
+    LLVMValueRef runtime_arith_rr;
+  } rt;
 } luaJ_CompileState;
 
 
@@ -241,18 +243,28 @@ static void runtime_arith_rr (lua_State *L, TValue *ra, TValue *rb, TValue *rc)
   }
 }
 
+#define rt_declare(function, ret, ...) \
+    do { \
+      LLVMTypeRef params[] = {__VA_ARGS__}; \
+      int nparams = sizeof(params) / sizeof(LLVMTypeRef); \
+      printf(">>> %d", nparams); \
+      LLVMTypeRef type = LLVMFunctionType(ret, params, nparams, 0); \
+      cs->rt.function = LLVMAddFunction(cs->f->module, #function, type); \
+    } while (0)
 
+#define rt_link(function) \
+            LLVMAddGlobalMapping(cs->Jit->engine, cs->rt.function, function)
 
-/*
-** Create runtime function pointers
-*/
-
-static LLVMValueRef makert_arith_rr (luaJ_Jit *Jit, luaJ_Function *f)
+static void declare_runtime (luaJ_CompileState *cs)
 {
-  LLVMTypeRef params[] =
-      {Jit->t_state, Jit->t_tvalue, Jit->t_tvalue, Jit->t_tvalue};
-  LLVMTypeRef type = LLVMFunctionType(LLVMVoidType(), params, 4, 0);
-  return LLVMAddFunction(f->module, "makert_arith_rr", type);
+  LLVMTypeRef lstate = cs->Jit->t_state;
+  LLVMTypeRef tvalue = cs->Jit->t_tvalue;
+  rt_declare(runtime_arith_rr, LLVMVoidType(), lstate, tvalue, tvalue, tvalue);
+}
+
+static void link_runtime (luaJ_CompileState *cs)
+{
+  rt_link(runtime_arith_rr);
 }
 
 
@@ -349,7 +361,7 @@ static void compile_arith (luaJ_CompileState *cs)
       makev_value_rk(cs, GETARG_B(cs->instr)),
       makev_value_rk(cs, GETARG_C(cs->instr))
   };
-  LLVMBuildCall(cs->builder, cs->rt_arith_rr, args, 4, "");
+  LLVMBuildCall(cs->builder, cs->rt.runtime_arith_rr, args, 4, "");
 
 #if 0
   /* Adding without calling a runtime function */
@@ -389,9 +401,7 @@ static void compile (luaJ_Jit *Jit, luaJ_Function *f)
   cs.f = f;
   cs.proto = f->closure->p;
   cs.builder = LLVMCreateBuilder();
-
-  ////////////////////////////////////////
-  cs.rt_arith_rr = makert_arith_rr(Jit, f);
+  declare_runtime(&cs);
 
   LLVMBasicBlockRef blocks[cs.proto->sizecode];
   createblocks(&cs, blocks);
@@ -425,9 +435,7 @@ static void compile (luaJ_Jit *Jit, luaJ_Function *f)
   }
 
   LLVMAddModule(Jit->engine, f->module);
-
-  ////////////////////////////////////////
-  LLVMAddGlobalMapping(Jit->engine, cs.rt_arith_rr, runtime_arith_rr);
+  link_runtime(&cs);
 }
 
 
