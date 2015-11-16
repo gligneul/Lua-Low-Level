@@ -1,12 +1,16 @@
-print("> function luafoo() return 123 end")
-function luafoo(a, b) return 123 end
+print("----------------------------------------")
+print("> function luafoo() ... end")
+function luafoo(a, b) return a + b end
 
+print("----------------------------------------")
 print("> jitfoo = jit.compile(luafoo)")
 jitfoo = jit.compile(luafoo)
 
+print("----------------------------------------")
 print("> jitfoo:dump()")
 jitfoo:dump()
 
+print("----------------------------------------")
 print("> jitfoo()")
-print(jitfoo("no", "yay"))
+print(jitfoo(2.5, 4))
 

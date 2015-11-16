@@ -1,4 +1,4 @@
 
 function f(a, b)
-    return b
+    return a + b
 end
