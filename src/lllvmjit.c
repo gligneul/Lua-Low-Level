@@ -42,6 +42,8 @@ typedef struct luaJ_Jit
   LLVMTypeRef state_type;
   LLVMTypeRef value_type;
   LLVMTypeRef ci_type;
+  LLVMTypeRef closure_type;
+  LLVMTypeRef proto_type;
 } luaJ_Jit;
 static luaJ_Jit *Jit = NULL;
 
@@ -54,6 +56,7 @@ typedef struct luaJ_CompileState
   LLVMValueRef state;           /* lua_State */
   LLVMValueRef ci;              /* CallInfo */
   LLVMValueRef func;            /* base = func + 1 */
+  LLVMValueRef k;               /* constants */
   Instruction instr;            /* current instruction */
   LLVMBasicBlockRef block;      /* current block */
   struct {                      /* runtime functions */
@@ -67,17 +70,10 @@ typedef struct luaJ_CompileState
 ** Macros and functions for creating LLVM types
 */
 
-#define makeptr_t(type) \
-  LLVMPointerType((type), 0)
-
-#define makestring_t() \
-  makeptr_t(LLVMInt8Type())
-
-#define makesizeof_t(type) \
-  LLVMIntType(8 * sizeof(type))
-
-#define makestruct_t(strukt) \
-  makenamedstruct_t(#strukt, sizeof(strukt))
+#define makeptr_t(type)         LLVMPointerType((type), 0)
+#define makestring_t()          makeptr_t(LLVMInt8Type())
+#define makesizeof_t(type)      LLVMIntType(8 * sizeof(type))
+#define makestruct_t(strukt)    makenamedstruct_t(#strukt, sizeof(strukt))
 
 static LLVMTypeRef makenamedstruct_t (const char *name, size_t size)
 {
@@ -93,27 +89,27 @@ static LLVMTypeRef makenamedstruct_t (const char *name, size_t size)
 ** Macros and functions for creating LLVM values
 */
 
-#define makeint(n) (LLVMConstInt(LLVMInt32Type(), (n), 1))
+#define makeint(n)              LLVMConstInt(LLVMInt32Type(), (n), 1)
 
 #define makestring(builder, str) \
   LLVMBuildPointerCast(builder, \
       LLVMBuildGlobalString(builder, str, ""), makestring_t(), "")
 
-#define getfieldptr(builder, value, type, strukt, field) \
-  getfieldbyoffset(builder, value, type, offsetof(strukt, field), #field "_ptr")
+#define getfieldptr(cs, value, type, strukt, field) \
+  getfieldbyoffset(cs, value, type, offsetof(strukt, field), #field "_ptr")
 
-#define loadfield(builder, value, type, strukt, field) \
-  LLVMBuildLoad(builder, \
-      getfieldptr(builder, value, type, strukt, field), #field)
+#define loadfield(cs, value, type, strukt, field) \
+  LLVMBuildLoad(cs->builder, \
+      getfieldptr(cs, value, type, strukt, field), #field)
 
-LLVMValueRef getfieldbyoffset (LLVMBuilderRef builder, LLVMValueRef value,
+LLVMValueRef getfieldbyoffset (luaJ_CompileState *cs, LLVMValueRef value,
                                LLVMTypeRef type, size_t offset,
                                const char *name)
 {
-  LLVMValueRef mem = LLVMBuildBitCast(builder, value, makestring_t(), "");
+  LLVMValueRef mem = LLVMBuildBitCast(cs->builder, value, makestring_t(), "");
   LLVMValueRef index[] = {makeint(offset)};
-  LLVMValueRef element = LLVMBuildGEP(builder, mem, index, 1, "");
-  return LLVMBuildBitCast(builder, element, makeptr_t(type), name);
+  LLVMValueRef element = LLVMBuildGEP(cs->builder, mem, index, 1, "");
+  return LLVMBuildBitCast(cs->builder, element, makeptr_t(type), name);
 }
 
 static LLVMValueRef makeprintf (LLVMModuleRef module)
@@ -131,16 +127,25 @@ static LLVMValueRef getvalue_r (luaJ_CompileState *cs, int arg)
 
 static LLVMValueRef getvalue_k (luaJ_CompileState *cs, int arg)
 {
+#if 0
+  // We can only use this case when L->ci->func is a Lua closure
+  LLVMValueRef indices[] = {makeint(arg)};
+  return LLVMBuildGEP(cs->builder, cs->k, indices, 1, "");
+#else
   TValue *value = cs->proto->k + arg;
   LLVMValueRef v_intptr = LLVMConstInt(makesizeof_t(TValue *),
     (uintptr_t)value, 0);
   return LLVMBuildIntToPtr(cs->builder, v_intptr, cs->Jit->value_type, "");
+#endif
 }
 
 #define getvalue_rk(cs, arg) \
   (ISK(arg) ? getvalue_k(cs, arg) : getvalue_r(cs, arg))
 
-
+#define getvaluedata(cs, type, name) \
+  LLVMBuildLoad(cs->builder, \
+      LLVMBuildBitCast(cs->builder, cs->func, makeptr_t(type), name "_ptr"), \
+      name)
 
 /*
 ** Runtime functions
@@ -195,10 +200,11 @@ static void createblocks (luaJ_CompileState *cs, LLVMBasicBlockRef *blocks)
 
   cs->state = LLVMGetParam(cs->f->value, 0);
   LLVMSetValueName(cs->state, "L");
-  cs->ci =
-      loadfield(cs->builder, cs->state, cs->Jit->ci_type, lua_State, ci);
-  cs->func =
-      loadfield(cs->builder, cs->ci, cs->Jit->value_type, CallInfo, func);
+  cs->ci = loadfield(cs, cs->state, cs->Jit->ci_type, lua_State, ci);
+  cs->func = loadfield(cs, cs->ci, cs->Jit->value_type, CallInfo, func);
+  LLVMValueRef closure = getvaluedata(cs, cs->Jit->closure_type, "closure");
+  LLVMValueRef proto = loadfield(cs, closure, cs->Jit->proto_type, LClosure, p);
+  cs->k = loadfield(cs, proto, cs->Jit->value_type, Proto, k);
 
   int nblocks = cs->proto->sizecode;
   for (int i = 0; i < nblocks; ++i) {
@@ -226,8 +232,7 @@ static void setregister (LLVMBuilderRef builder, LLVMValueRef reg,
 static void settop (luaJ_CompileState *cs, int offset)
 {
   LLVMValueRef value = getvalue_r(cs, offset);
-  LLVMValueRef top =
-      getfieldptr(cs->builder, cs->state, cs->Jit->value_type, lua_State, top);
+  LLVMValueRef top = getfieldptr(cs, cs->state, cs->Jit->value_type, lua_State, top);
   LLVMBuildStore(cs->builder, value, top);
 }
 
@@ -339,6 +344,8 @@ static void initJit (lua_State *L)
   Jit->state_type = makestruct_t(lua_State);
   Jit->ci_type = makestruct_t(CallInfo);
   Jit->value_type = makestruct_t(TValue);
+  Jit->closure_type = makestruct_t(Closure);
+  Jit->proto_type = makestruct_t(Proto);
 }
 
 static void precall (lua_State *L, luaJ_Function *f)
