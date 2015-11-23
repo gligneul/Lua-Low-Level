@@ -61,7 +61,9 @@ typedef struct luaJ_CompileState
   LLVMBasicBlockRef block;      /* current block */
   struct {                      /* runtime functions */
     LLVMValueRef runtime_arith_rr;
-    LLVMValueRef runtime_lt;
+    LLVMValueRef luaV_equalobj;
+    LLVMValueRef luaV_lessthan;
+    LLVMValueRef luaV_lessequal;
   } rt;
 } luaJ_CompileState;
 
@@ -162,11 +164,6 @@ static void runtime_arith_rr (lua_State *L, TValue *ra, TValue *rb, TValue *rc)
   }
 }
 
-static int runtime_lt (lua_State *L, TValue *rb, TValue *rc, int a)
-{
-  return luaV_lessthan(L, rb, rc) != a;
-}
-
 #define rt_declare(function, ret, ...) \
     do { \
       LLVMTypeRef params[] = {__VA_ARGS__}; \
@@ -180,16 +177,20 @@ static void declare_runtime (luaJ_CompileState *cs)
   LLVMTypeRef lstate = cs->Jit->state_type;
   LLVMTypeRef tvalue = cs->Jit->value_type;
   rt_declare(runtime_arith_rr, LLVMVoidType(), lstate, tvalue, tvalue, tvalue);
-  rt_declare(runtime_lt, makeint_t(), lstate, tvalue, tvalue, makeint_t());
+  rt_declare(luaV_equalobj, makeint_t(), lstate, tvalue, tvalue);
+  rt_declare(luaV_lessthan, makeint_t(), lstate, tvalue, tvalue);
+  rt_declare(luaV_lessequal, makeint_t(), lstate, tvalue, tvalue);
 }
 
 #define rt_link(function) \
-            LLVMAddGlobalMapping(cs->Jit->engine, cs->rt.function, function)
+  LLVMAddGlobalMapping(cs->Jit->engine, cs->rt.function, function)
 
 static void link_runtime (luaJ_CompileState *cs)
 {
   rt_link(runtime_arith_rr);
-  rt_link(runtime_lt);
+  rt_link(luaV_equalobj);
+  rt_link(luaV_lessthan);
+  rt_link(luaV_lessequal);
 }
 
 
@@ -250,10 +251,21 @@ static void compile_move (luaJ_CompileState *cs)
 
 static void compile_loadk (luaJ_CompileState *cs)
 {
-  int a = GETARG_A(cs->instr);
-  LLVMValueRef v_ra = getvalue_r(cs, a);
-  LLVMValueRef v_rb = getvalue_k(cs, GETARG_Bx(cs->instr));
-  setregister(cs->builder, v_ra, v_rb);
+  LLVMValueRef ra = getvalue_r(cs, GETARG_A(cs->instr));
+  LLVMValueRef rb = getvalue_k(cs, GETARG_Bx(cs->instr));
+  setregister(cs->builder, ra, rb);
+}
+
+static void compile_loadbool (luaJ_CompileState *cs)
+{
+  LLVMValueRef ra = getvalue_r(cs, GETARG_A(cs->instr));
+  LLVMValueRef ra_value = getfieldptr(cs, ra, makeint_t(), TValue, value_);
+  LLVMBuildStore(cs->builder, makeint(GETARG_B(cs->instr)), ra_value);
+  LLVMValueRef ra_tag = getfieldptr(cs, ra, makeint_t(), TValue, tt_);
+  LLVMBuildStore(cs->builder, makeint(LUA_TBOOLEAN), ra_tag);
+
+  if (GETARG_C(cs->instr))
+    LLVMBuildBr(cs->builder, cs->blocks[cs->idx + 2]);
 }
 
 static void compile_return (luaJ_CompileState *cs)
@@ -286,21 +298,27 @@ static void compile_jmp (luaJ_CompileState *cs)
   LLVMBuildBr(cs->builder, cs->blocks[cs->idx + GETARG_sBx(cs->instr) + 1]);
 }
 
-static void compile_lt (luaJ_CompileState *cs)
+static void compile_cmp (luaJ_CompileState *cs)
 {
   LLVMValueRef args[] = {
       cs->state,
       getvalue_rk(cs, GETARG_B(cs->instr)),
-      getvalue_rk(cs, GETARG_C(cs->instr)),
-      makeint(GETARG_A(cs->instr))
+      getvalue_rk(cs, GETARG_C(cs->instr))
   };
-  LLVMValueRef result =
-      LLVMBuildCall(cs->builder, cs->rt.runtime_lt, args, 4, "");
-  LLVMValueRef bool_result =
-      LLVMBuildIntCast(cs->builder, result, LLVMInt1Type(), "");
+
+  LLVMValueRef function = NULL;
+  switch (GET_OPCODE(cs->instr)) {
+    case OP_EQ: function = cs->rt.luaV_equalobj; break;
+    case OP_LT: function = cs->rt.luaV_lessthan; break;
+    case OP_LE: function = cs->rt.luaV_lessequal; break;
+    default:    lua_assert(false);
+  }
+  LLVMValueRef result = LLVMBuildCall(cs->builder, function, args, 3, "");
+  LLVMValueRef a = makeint(GETARG_A(cs->instr));
+  LLVMValueRef cmp = LLVMBuildICmp(cs->builder, LLVMIntNE, result, a, "");
   LLVMBasicBlockRef next_block = cs->blocks[cs->idx + 2];
   LLVMBasicBlockRef jmp_block = cs->blocks[cs->idx + 1];
-  LLVMBuildCondBr(cs->builder, bool_result, next_block, jmp_block);
+  LLVMBuildCondBr(cs->builder, cmp, next_block, jmp_block);
 }
 
 static void compile (luaJ_Jit *Jit, luaJ_Function *f)
@@ -325,10 +343,13 @@ static void compile (luaJ_Jit *Jit, luaJ_Function *f)
     switch (GET_OPCODE(cs.instr)) {
       case OP_MOVE:     compile_move(&cs); break;
       case OP_LOADK:    compile_loadk(&cs); break;
+      case OP_LOADBOOL: compile_loadbool(&cs); break;
       case OP_RETURN:   compile_return(&cs); break;
       case OP_ADD:      compile_arith(&cs); break;
       case OP_JMP:      compile_jmp(&cs); break;
-      case OP_LT:       compile_lt(&cs); break;
+      case OP_EQ:
+      case OP_LT:
+      case OP_LE:       compile_cmp(&cs); break;
       default: break;
     }
 
