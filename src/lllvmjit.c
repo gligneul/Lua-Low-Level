@@ -51,14 +51,17 @@ typedef struct luaJ_CompileState
   luaJ_Function *f;
   Proto *proto;
   LLVMBuilderRef builder;
+  LLVMBasicBlockRef *blocks;    /* one block per instruction */
   LLVMValueRef state;           /* lua_State */
   LLVMValueRef ci;              /* CallInfo */
   LLVMValueRef func;            /* base = func + 1 */
   LLVMValueRef k;               /* constants */
+  int idx;                      /* current block/instruction index */
   Instruction instr;            /* current instruction */
   LLVMBasicBlockRef block;      /* current block */
   struct {                      /* runtime functions */
     LLVMValueRef runtime_arith_rr;
+    LLVMValueRef runtime_lt;
   } rt;
 } luaJ_CompileState;
 
@@ -66,6 +69,7 @@ typedef struct luaJ_CompileState
 
 /* Macros and functions for creating LLVM types */
 
+#define makeint_t()             LLVMIntType(8 * sizeof(int))
 #define makeptr_t(type)         LLVMPointerType((type), 0)
 #define makestring_t()          makeptr_t(LLVMInt8Type())
 #define makesizeof_t(type)      LLVMIntType(8 * sizeof(type))
@@ -158,6 +162,11 @@ static void runtime_arith_rr (lua_State *L, TValue *ra, TValue *rb, TValue *rc)
   }
 }
 
+static int runtime_lt (lua_State *L, TValue *rb, TValue *rc, int a)
+{
+  return luaV_lessthan(L, rb, rc) != a;
+}
+
 #define rt_declare(function, ret, ...) \
     do { \
       LLVMTypeRef params[] = {__VA_ARGS__}; \
@@ -171,6 +180,7 @@ static void declare_runtime (luaJ_CompileState *cs)
   LLVMTypeRef lstate = cs->Jit->state_type;
   LLVMTypeRef tvalue = cs->Jit->value_type;
   rt_declare(runtime_arith_rr, LLVMVoidType(), lstate, tvalue, tvalue, tvalue);
+  rt_declare(runtime_lt, makeint_t(), lstate, tvalue, tvalue, makeint_t());
 }
 
 #define rt_link(function) \
@@ -179,13 +189,14 @@ static void declare_runtime (luaJ_CompileState *cs)
 static void link_runtime (luaJ_CompileState *cs)
 {
   rt_link(runtime_arith_rr);
+  rt_link(runtime_lt);
 }
 
 
 
 /* Compiles the bytecode into LLVM IR */
 
-static void createblocks (luaJ_CompileState *cs, LLVMBasicBlockRef *blocks)
+static void createblocks (luaJ_CompileState *cs)
 {
   LLVMBasicBlockRef entry = LLVMAppendBasicBlock(cs->f->value, "bblock.entry");
   LLVMPositionBuilderAtEnd(cs->builder, entry);
@@ -203,10 +214,10 @@ static void createblocks (luaJ_CompileState *cs, LLVMBasicBlockRef *blocks)
     char name[128];
     const char *instr = luaP_opnames[GET_OPCODE(cs->proto->code[i])];
     sprintf(name, "bblock.%d.%s", i, instr);
-    blocks[i] = LLVMAppendBasicBlock(cs->f->value, name);
+    cs->blocks[i] = LLVMAppendBasicBlock(cs->f->value, name);
   }
 
-  LLVMBuildBr(cs->builder, blocks[0]);
+  LLVMBuildBr(cs->builder, cs->blocks[0]);
 }
 
 static void setregister (LLVMBuilderRef builder, LLVMValueRef reg,
@@ -270,6 +281,28 @@ static void compile_arith (luaJ_CompileState *cs)
   LLVMBuildCall(cs->builder, cs->rt.runtime_arith_rr, args, 4, "");
 }
 
+static void compile_jmp (luaJ_CompileState *cs)
+{
+  LLVMBuildBr(cs->builder, cs->blocks[cs->idx + GETARG_sBx(cs->instr) + 1]);
+}
+
+static void compile_lt (luaJ_CompileState *cs)
+{
+  LLVMValueRef args[] = {
+      cs->state,
+      getvalue_rk(cs, GETARG_B(cs->instr)),
+      getvalue_rk(cs, GETARG_C(cs->instr)),
+      makeint(GETARG_A(cs->instr))
+  };
+  LLVMValueRef result =
+      LLVMBuildCall(cs->builder, cs->rt.runtime_lt, args, 4, "");
+  LLVMValueRef bool_result =
+      LLVMBuildIntCast(cs->builder, result, LLVMInt1Type(), "");
+  LLVMBasicBlockRef next_block = cs->blocks[cs->idx + 2];
+  LLVMBasicBlockRef jmp_block = cs->blocks[cs->idx + 1];
+  LLVMBuildCondBr(cs->builder, bool_result, next_block, jmp_block);
+}
+
 static void compile (luaJ_Jit *Jit, luaJ_Function *f)
 {
   luaJ_CompileState cs;
@@ -277,12 +310,14 @@ static void compile (luaJ_Jit *Jit, luaJ_Function *f)
   cs.f = f;
   cs.proto = f->closure->p;
   cs.builder = LLVMCreateBuilder();
-  declare_runtime(&cs);
-
   LLVMBasicBlockRef blocks[cs.proto->sizecode];
-  createblocks(&cs, blocks);
+  cs.blocks = blocks;
+  
+  declare_runtime(&cs);
+  createblocks(&cs);
 
   for (int i = 0; i < cs.proto->sizecode; ++i) {
+    cs.idx = i;
     cs.instr = cs.proto->code[i];
     cs.block = blocks[i];
     LLVMPositionBuilderAtEnd(cs.builder, cs.block);
@@ -292,6 +327,8 @@ static void compile (luaJ_Jit *Jit, luaJ_Function *f)
       case OP_LOADK:    compile_loadk(&cs); break;
       case OP_RETURN:   compile_return(&cs); break;
       case OP_ADD:      compile_arith(&cs); break;
+      case OP_JMP:      compile_jmp(&cs); break;
+      case OP_LT:       compile_lt(&cs); break;
       default: break;
     }
 

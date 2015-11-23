@@ -1,4 +1,7 @@
 
 function f(a, b)
-    return a + 200
+    if a > b then
+        return 1
+    end
+    return 0
 end

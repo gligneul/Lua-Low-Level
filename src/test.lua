@@ -1,6 +1,6 @@
 print("----------------------------------------")
 print("> function luafoo() ... end")
-function luafoo(a, b) return a + 20 end
+function luafoo(a, b) if a < b then return 1 end return 0 end
 
 print("----------------------------------------")
 print("> jitfoo = jit.compile(luafoo)")
@@ -12,5 +12,5 @@ jitfoo:dump()
 
 print("----------------------------------------")
 print("> jitfoo()")
-print(jitfoo(2.5, 4))
+print(jitfoo(4.1, 4))
 
