@@ -1,4 +1,6 @@
 
 function f(a, b)
-    return a + b
+    if a then
+        return b
+    end
 end
