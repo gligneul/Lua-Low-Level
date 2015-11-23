@@ -24,9 +24,7 @@
 #include <stdlib.h>
 
 
-/*
-** Type definitions
-*/
+/* Type definitions */
 
 struct luaJ_Function
 {
@@ -66,9 +64,7 @@ typedef struct luaJ_CompileState
 
 
 
-/*
-** Macros and functions for creating LLVM types
-*/
+/* Macros and functions for creating LLVM types */
 
 #define makeptr_t(type)         LLVMPointerType((type), 0)
 #define makestring_t()          makeptr_t(LLVMInt8Type())
@@ -85,9 +81,7 @@ static LLVMTypeRef makenamedstruct_t (const char *name, size_t size)
 
 
 
-/*
-** Macros and functions for creating LLVM values
-*/
+/* Macros and functions for creating LLVM values */
 
 #define makeint(n)              LLVMConstInt(LLVMInt32Type(), (n), 1)
 
@@ -147,9 +141,9 @@ static LLVMValueRef getvalue_k (luaJ_CompileState *cs, int arg)
       LLVMBuildBitCast(cs->builder, cs->func, makeptr_t(type), name "_ptr"), \
       name)
 
-/*
-** Runtime functions
-*/
+
+
+/* Runtime functions */
 
 static void runtime_arith_rr (lua_State *L, TValue *ra, TValue *rb, TValue *rc)
 {
@@ -189,9 +183,7 @@ static void link_runtime (luaJ_CompileState *cs)
 
 
 
-/*
-** Compiles the bytecode into LLVM IR
-*/
+/* Compiles the bytecode into LLVM IR */
 
 static void createblocks (luaJ_CompileState *cs, LLVMBasicBlockRef *blocks)
 {
@@ -324,9 +316,7 @@ static void compile (luaJ_Jit *Jit, luaJ_Function *f)
 
 
 
-/*
-** Other auxiliary functions
-*/
+/* Other auxiliary functions */
 
 static void initJit (lua_State *L)
 {
@@ -366,9 +356,7 @@ static void precall (lua_State *L, luaJ_Function *f)
 
 
 
-/*
-** API implementation
-*/
+/* API implementation */
 
 LUAI_FUNC luaJ_Function *luaJ_compile (lua_State *L, StkId closure)
 {
