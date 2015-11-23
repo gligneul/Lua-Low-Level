@@ -1,6 +1,4 @@
 
 function f(a, b)
-    if a then
-        return b
-    end
+    return a + 200
 end

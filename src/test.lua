@@ -1,6 +1,6 @@
 print("----------------------------------------")
 print("> function luafoo() ... end")
-function luafoo(a, b) return 123 end -- a + b end
+function luafoo(a, b) return a + 20 end
 
 print("----------------------------------------")
 print("> jitfoo = jit.compile(luafoo)")

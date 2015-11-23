@@ -140,7 +140,7 @@ static LLVMValueRef getvalue_k (luaJ_CompileState *cs, int arg)
 }
 
 #define getvalue_rk(cs, arg) \
-  (ISK(arg) ? getvalue_k(cs, arg) : getvalue_r(cs, arg))
+  (ISK(arg) ? getvalue_k(cs, INDEXK(arg)) : getvalue_r(cs, arg))
 
 #define getvaluedata(cs, type, name) \
   LLVMBuildLoad(cs->builder, \
