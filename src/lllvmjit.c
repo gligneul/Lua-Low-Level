@@ -226,7 +226,6 @@ static void setregister (LLVMBuilderRef builder, LLVMValueRef reg,
 {
   LLVMValueRef value_iptr =
       LLVMBuildBitCast(builder, value, makeptr_t(makesizeof_t(TValue)), "");
-  LLVMDumpValue(value_iptr);
   LLVMValueRef value_i = LLVMBuildLoad(builder, value_iptr, "");
   LLVMValueRef reg_iptr =
       LLVMBuildBitCast(builder, reg, makeptr_t(makesizeof_t(TValue)), "");
