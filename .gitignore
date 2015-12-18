@@ -32,3 +32,6 @@ src/luac
 
 # Debug files
 *.dSYM/
+
+# Vim temporaries
+*.swp
