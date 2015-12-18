@@ -9,7 +9,8 @@ PLAT= linux
 
 CC= clang
 LD= clang++
-CFLAGS= -O0 -g -Wall -Wextra -DLUA_COMPAT_5_2 $(SYSCFLAGS) $(MYCFLAGS)
+CFLAGS= -O0 -g -Wall -Wextra -Werror -Wno-pedantic -DLUA_COMPAT_5_2 \
+        $(SYSCFLAGS) $(MYCFLAGS)
 LDFLAGS= $(SYSLDFLAGS) $(MYLDFLAGS)
 LIBS= -lm $(SYSLIBS) $(MYLIBS)
 

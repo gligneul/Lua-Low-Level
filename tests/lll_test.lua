@@ -6,9 +6,33 @@
 -- lll_test.lua
 -- Barebone for creating tests for LLL
 
+--- Verifies if results are the same
+local function verity_result(ok_lua, r_lua, ok_lll, r_lll)
+    if ok_lua or ok_lll then
+        return ok_lua == ok_lll and r_lua == r_lll
+    else
+        return string.match(r_lua, r_lll) == r_lll
+    end
+end
+
+--- Creates the error message
+local function error_msg(f, args, ok_lua, r_lua, ok_lll, r_lll)
+    local msg = 
+        'test failed\n' ..
+        'function: ' ..  f .. '\n' ..
+        'args:    '
+    for _, arg in ipairs(args) do
+        msg = msg .. ' ' .. arg
+    end
+    msg = msg .. '\n' ..
+        'expected: ' .. tostring(r_lua) .. '\n' ..
+        'result:   ' .. tostring(r_lll) .. '\n'
+    return msg
+end
+
 --- Description
 ---   Compile the functions and run both Lua and LLL versions of it.
----   Then compare if the results are the same. If not, enter debug mode.
+---   Then compare if the results are the same.
 ---
 --- Parameters
 ---   functions
@@ -29,12 +53,10 @@ return function(functions, arguments)
 
         -- Execute the functions
         for _, a in ipairs(arguments) do
-            local r_lua = f_lua(table.unpack(a))
-            local r_lll = f_lll(table.unpack(a))
-            if lua_result ~= lll_result then
-                print('unmatched result: ', f_str)
-                debug.debug()
-                error('ending tests')
+            local ok_lua, r_lua = pcall(f_lua, table.unpack(a))
+            local ok_lll, r_lll = pcall(f_lll, table.unpack(a))
+            if not verity_result(ok_lua, r_lua, ok_lll, r_lll) then
+                error(error_msg(f_str, a, ok_lua, r_lua, ok_lll, r_lll))
             end
         end
     end
