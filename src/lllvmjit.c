@@ -1,5 +1,5 @@
 /*
-** LLL - Lua Low-Level
+** LLL - Lua Low Level
 ** September, 2015
 ** Author: Gabriel de Quadros Ligneul
 ** Copyright Notice for LLL: see lllvmjit.h
