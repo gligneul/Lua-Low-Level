@@ -22,7 +22,6 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 
 
 /* Type definitions */
@@ -60,8 +59,7 @@ typedef struct luaJ_CompileState
   Instruction instr;            /* current instruction */
   LLVMBasicBlockRef block;      /* current block */
   struct {                      /* runtime functions */
-    LLVMValueRef luaV_tonumber_;
-    LLVMValueRef luaT_trybinTM;
+    LLVMValueRef runtime_arith_rr;
     LLVMValueRef luaV_equalobj;
     LLVMValueRef luaV_lessthan;
     LLVMValueRef luaV_lessequal;
@@ -77,14 +75,6 @@ typedef struct luaJ_CompileState
 #define makestring_t()          makeptr_t(LLVMInt8Type())
 #define makesizeof_t(type)      LLVMIntType(8 * sizeof(type))
 #define makestruct_t(strukt)    makenamedstruct_t(#strukt, sizeof(strukt))
-
-#if LUA_FLOAT_TYPE == LUA_FLOAT_FLOAT
-    #define makefloat_t LLVMFloatType
-#elif LUA_FLOAT_TYPE == LUA_FLOAT_LONGDOUBLE
-    #define makefloat_t LLVMFP128Type
-#elif LUA_FLOAT_TYPE == LUA_FLOAT_DOUBLE
-    #define makefloat_t LLVMDoubleType
-#endif
 
 static LLVMTypeRef makenamedstruct_t (const char *name, size_t size)
 {
@@ -111,10 +101,6 @@ static LLVMTypeRef makenamedstruct_t (const char *name, size_t size)
   LLVMBuildLoad(cs->builder, \
       getfieldptr(cs, value, fieldtype, strukt, field), #field)
 
-#define setfield(cs, value, fieldvalue, strukt, field) \
-  LLVMBuildStore(cs->builder, fieldvalue, \
-                 getfieldptr(cs, value, LLVMTypeOf(fieldvalue), strukt, field))
-
 LLVMValueRef getfieldbyoffset (luaJ_CompileState *cs, LLVMValueRef value,
                                LLVMTypeRef fieldtype, size_t offset,
                                const char *name)
@@ -135,14 +121,14 @@ static LLVMValueRef makeprintf (LLVMModuleRef module)
 #endif
 
 static LLVMValueRef gettvalue_r (luaJ_CompileState *cs, int arg,
-                                 const char* name)
+        const char* name)
 {
   LLVMValueRef indices[] = {makeint(1 + arg)};
   return LLVMBuildGEP(cs->builder, cs->func, indices, 1, name);
 }
 
 static LLVMValueRef gettvalue_k (luaJ_CompileState *cs, int arg,
-                                 const char *name)
+        const char *name)
 {
   TValue *value = cs->proto->k + arg;
   LLVMValueRef v_intptr = LLVMConstInt(makesizeof_t(TValue *),
@@ -153,68 +139,28 @@ static LLVMValueRef gettvalue_k (luaJ_CompileState *cs, int arg,
 #define gettvalue_rk(cs, arg, name) \
   (ISK(arg) ? gettvalue_k(cs, INDEXK(arg), name) : gettvalue_r(cs, arg, name))
 
-#define checkttvaluetag(cs, tvalue, tag) \
-  LLVMBuildICmp(cs->builder, LLVMIntEQ, \
-                loadfield(cs, tvalue, makeint_t(), TValue, tt_), \
-                makeint(tag), "")
-
-/* Creates a new subblock after $mainblock. */
-#define addsubblock(cs, mainblock, suffix) \
-  addsubblockafter(cs, mainblock, mainblock, suffix)
-
-/* Creates a new subblock, and inserts it after @previousblock. */
-static LLVMBasicBlockRef addsubblockafter (luaJ_CompileState *cs,
-        LLVMBasicBlockRef mainblock, LLVMBasicBlockRef previousblock,
-        const char* suffix)
-{
-  const char *basename = LLVMGetValueName(LLVMBasicBlockAsValue(mainblock));
-  char newname[strlen(basename) + strlen(suffix) + 2];
-  sprintf(newname, "%s.%s", basename, suffix);
-  LLVMBasicBlockRef newblock = LLVMAppendBasicBlock(cs->f->value, newname);
-  LLVMMoveBasicBlockAfter(newblock, previousblock);
-  return newblock;
-}
-
-/* Returns the float representation of $tvalue, if it exists.
-** Jumps to $thenblock if it exists, otherwise jumps to $elseblock. */
-static LLVMValueRef checkfloat (luaJ_CompileState *cs, LLVMValueRef tvalue,
-        LLVMBasicBlockRef testblock, LLVMBasicBlockRef thenblock,
-        LLVMBasicBlockRef elseblock)
-{
-  LLVMPositionBuilderAtEnd(cs->builder, testblock);
-  LLVMValueRef isfloat = checkttvaluetag(cs, tvalue, LUA_TNUMFLT);
-  LLVMBasicBlockRef floatblock = addsubblock(cs, testblock, "float");
-  LLVMBasicBlockRef convertblock =
-      addsubblockafter(cs, testblock, floatblock, "convert");
-  LLVMBuildCondBr(cs->builder, isfloat, floatblock, convertblock);
-
-  LLVMPositionBuilderAtEnd(cs->builder, floatblock);
-  LLVMValueRef floatval = loadfield(cs, tvalue, makefloat_t(), TValue, value_);
-  LLVMBuildBr(cs->builder, thenblock);
-
-  LLVMPositionBuilderAtEnd(cs->builder, convertblock);
-  LLVMValueRef convertptr = LLVMBuildAlloca(cs->builder, makefloat_t(),
-      "convertptr");
-  LLVMValueRef tonumber_params[] = {tvalue, convertptr};
-  LLVMValueRef tonumber_ret = LLVMBuildCall(cs->builder, cs->rt.luaV_tonumber_,
-      tonumber_params, 2, "");
-  LLVMValueRef convertval = LLVMBuildLoad(cs->builder, convertptr,
-      "convertval");
-  LLVMValueRef isconverted = LLVMBuildICmp(cs->builder, LLVMIntNE, makeint(0), 
-      tonumber_ret, "");
-  LLVMBuildCondBr(cs->builder, isconverted, thenblock, elseblock);
-
-  LLVMPositionBuilderAtEnd(cs->builder, thenblock);
-  LLVMValueRef phi = LLVMBuildPhi(cs->builder, makefloat_t(), "");
-  LLVMValueRef incoming_values[] = {floatval, convertval};
-  LLVMBasicBlockRef incoming_blocks[] = {floatblock, convertblock};
-  LLVMAddIncoming(phi, incoming_values, incoming_blocks, 2);
-  return phi;
-}
+#define getvaluedata(cs, type, name) \
+  LLVMBuildLoad(cs->builder, \
+      LLVMBuildBitCast(cs->builder, cs->func, makeptr_t(type), name "_ptr"), \
+      name)
 
 
 
 /* Runtime functions */
+
+static void runtime_arith_rr (lua_State *L, TValue *ra, TValue *rb, TValue *rc)
+{
+  lua_Number nb; lua_Number nc;
+  if (ttisinteger(rb) && ttisinteger(rc)) {
+    lua_Integer ib = ivalue(rb);
+    lua_Integer ic = ivalue(rc);
+    setivalue(ra, intop(+, ib, ic));
+  } else if (tonumber(rb, &nb) && tonumber(rc, &nc)) {
+    setfltvalue(ra, luai_numadd(L, nb, nc));
+  } else {
+    luaT_trybinTM(L, rb, rc, ra, TM_ADD);
+  }
+}
 
 static void declare_runtime (luaJ_CompileState *cs)
 {
@@ -228,9 +174,7 @@ static void declare_runtime (luaJ_CompileState *cs)
 
   LLVMTypeRef lstate = cs->Jit->state_type;
   LLVMTypeRef tvalue = cs->Jit->value_type;
-  rt_declare(luaV_tonumber_, makeint_t(), tvalue, makeptr_t(makefloat_t()));
-  rt_declare(luaT_trybinTM, LLVMVoidType(), lstate, tvalue, tvalue, tvalue,
-       makeint_t());
+  rt_declare(runtime_arith_rr, LLVMVoidType(), lstate, tvalue, tvalue, tvalue);
   rt_declare(luaV_equalobj, makeint_t(), lstate, tvalue, tvalue);
   rt_declare(luaV_lessthan, makeint_t(), lstate, tvalue, tvalue);
   rt_declare(luaV_lessequal, makeint_t(), lstate, tvalue, tvalue);
@@ -241,8 +185,7 @@ static void link_runtime (luaJ_CompileState *cs)
   #define rt_link(function) \
     LLVMAddGlobalMapping(cs->Jit->engine, cs->rt.function, function)
 
-  rt_link(luaV_tonumber_);
-  rt_link(luaT_trybinTM);
+  rt_link(runtime_arith_rr);
   rt_link(luaV_equalobj);
   rt_link(luaV_lessthan);
   rt_link(luaV_lessequal);
@@ -311,7 +254,7 @@ static void compile_loadk (luaJ_CompileState *cs)
     GETARG_Bx(cs->instr) : GETARG_Ax(cs->instr + 1);
   LLVMValueRef ra = gettvalue_r(cs, GETARG_A(cs->instr), "ra");
   LLVMValueRef kvalue = gettvalue_k(cs, kposition, "kvalue");
-  setregister(cs->builder, ra, kvalue);
+  setregister(cs->builder, ra, konst);
 }
 
 static void compile_loadbool (luaJ_CompileState *cs)
@@ -339,85 +282,16 @@ static void compile_loadnil (luaJ_CompileState *cs)
   }
 }
 
-static void compile_intarith (luaJ_CompileState *cs,
-        LLVMBasicBlockRef entryblock, LLVMBasicBlockRef elseblock,
-        LLVMBasicBlockRef endblock, LLVMValueRef rb, LLVMValueRef rc)
-{
-  LLVMPositionBuilderAtEnd(cs->builder, entryblock);
-  LLVMValueRef is_rb_int = checkttvaluetag(cs, rb, LUA_TNUMINT);
-  LLVMBasicBlockRef tmpblock = addsubblock(cs, entryblock, "tmp");
-  LLVMBuildCondBr(cs->builder, is_rb_int, tmpblock, elseblock);
-  
-  LLVMPositionBuilderAtEnd(cs->builder, tmpblock);
-  LLVMValueRef is_rc_int = checkttvaluetag(cs, rc, LUA_TNUMINT);
-  LLVMBasicBlockRef intblock =
-      addsubblockafter(cs, entryblock, tmpblock, "computeint");
-  LLVMBuildCondBr(cs->builder, is_rc_int, intblock, elseblock);
-
-  LLVMPositionBuilderAtEnd(cs->builder, intblock);
-  LLVMValueRef ra = gettvalue_r(cs, GETARG_A(cs->instr), "ra");
-  setfield(cs, ra, makeint(LUA_TNUMINT), TValue, tt_);
-  LLVMTypeRef luaint_t = makesizeof_t(lua_Integer);
-  LLVMValueRef valb = loadfield(cs, rb, luaint_t, TValue, value_);
-  LLVMValueRef valc = loadfield(cs, rc, luaint_t, TValue, value_);
-  LLVMValueRef vala= LLVMBuildBinOp(cs->builder, LLVMAdd, valb, valc, "vala");
-  setfield(cs, ra, vala, TValue, value_);
-  LLVMBuildBr(cs->builder, endblock);
-
-  // TODO verify:
-  // #define intop(op,v1,v2) l_castU2S(l_castS2U(v1) op l_castS2U(v2))
-}
-
-static void compile_floatarith (luaJ_CompileState *cs,
-        LLVMBasicBlockRef entryblock, LLVMBasicBlockRef elseblock,
-        LLVMBasicBlockRef endblock, LLVMValueRef rb, LLVMValueRef rc)
-{
-  LLVMBasicBlockRef tmpblock = addsubblock(cs, entryblock, "tmp");
-  LLVMValueRef valb = checkfloat(cs, rb, entryblock, tmpblock, elseblock);
-
-  LLVMBasicBlockRef floatblock = addsubblockafter(cs, entryblock, tmpblock, 
-      "compute");
-  LLVMValueRef valc = checkfloat(cs, rc, tmpblock, floatblock, elseblock);
-
-  LLVMPositionBuilderAtEnd(cs->builder, floatblock);
-  LLVMValueRef ra = gettvalue_r(cs, GETARG_A(cs->instr), "ra");
-  setfield(cs, ra, makeint(LUA_TNUMFLT), TValue, tt_);
-  LLVMValueRef vala = LLVMBuildBinOp(cs->builder, LLVMFAdd, valb, valc, "vala");
-  setfield(cs, ra, vala, TValue, value_);
-  LLVMBuildBr(cs->builder, endblock);
-}
-
-static void compile_tmarith (luaJ_CompileState *cs, LLVMBasicBlockRef tmblock,
-        LLVMBasicBlockRef endblock, LLVMValueRef rb, LLVMValueRef rc)
-{
-  LLVMPositionBuilderAtEnd(cs->builder, tmblock);
-  LLVMValueRef args[] = {
-    cs->state, rb, rc,
-    gettvalue_rk(cs, GETARG_A(cs->instr), "ra"),
-    makeint(TM_ADD)
-  };
-  LLVMBuildCall(cs->builder, cs->rt.luaT_trybinTM, args, 5, "");
-  LLVMBuildBr(cs->builder, endblock);
-}
-
 static void compile_arith (luaJ_CompileState *cs)
 {
-  // Create blocks
-  LLVMBasicBlockRef floatblock = addsubblock(cs, cs->block, "float");
-  LLVMBasicBlockRef tmblock = addsubblockafter(cs, cs->block, floatblock, "tm");
-  LLVMBasicBlockRef endblock = addsubblockafter(cs, cs->block, tmblock, "end");
-
-  // Get operands
   updatestack(cs);
-  LLVMPositionBuilderAtEnd(cs->builder, cs->block);
-  LLVMValueRef rb = gettvalue_rk(cs, GETARG_B(cs->instr), "rb");
-  LLVMValueRef rc = gettvalue_rk(cs, GETARG_C(cs->instr), "rc");
-
-  // Compile sub-cases
-  compile_intarith(cs, cs->block, floatblock, endblock, rb, rc);
-  compile_floatarith(cs, floatblock, tmblock, endblock, rb, rc);
-  compile_tmarith(cs, tmblock, endblock, rb, rc);
-  cs->block = endblock;
+  LLVMValueRef args[] = {
+      cs->state,
+      gettvalue_r(cs, GETARG_A(cs->instr), "ra"),
+      gettvalue_rk(cs, GETARG_B(cs->instr), "rkb"),
+      gettvalue_rk(cs, GETARG_C(cs->instr), "rkc")
+  };
+  LLVMBuildCall(cs->builder, cs->rt.runtime_arith_rr, args, 4, "");
 }
 
 static void compile_jmp (luaJ_CompileState *cs)
@@ -536,10 +410,8 @@ static void compile (luaJ_Jit *Jit, luaJ_Function *f)
     cs.block = blocks[i];
     LLVMPositionBuilderAtEnd(cs.builder, cs.block);
     compile_opcode(&cs);
-    if (LLVMGetBasicBlockTerminator(cs.block) == NULL) {
-      LLVMPositionBuilderAtEnd(cs.builder, cs.block);
+    if (LLVMGetBasicBlockTerminator(cs.block) == NULL)
       LLVMBuildBr(cs.builder, blocks[i + 1]);
-    }
   }
 
   LLVMDisposeBuilder(cs.builder);
