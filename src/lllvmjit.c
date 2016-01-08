@@ -254,7 +254,7 @@ static void compile_loadk (luaJ_CompileState *cs)
     GETARG_Bx(cs->instr) : GETARG_Ax(cs->instr + 1);
   LLVMValueRef ra = gettvalue_r(cs, GETARG_A(cs->instr), "ra");
   LLVMValueRef kvalue = gettvalue_k(cs, kposition, "kvalue");
-  setregister(cs->builder, ra, konst);
+  setregister(cs->builder, ra, kvalue);
 }
 
 static void compile_loadbool (luaJ_CompileState *cs)
