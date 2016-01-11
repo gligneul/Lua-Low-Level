@@ -55,6 +55,10 @@ typedef struct luaJ_Jit
     LLVMTypeRef luaJ_modrr;
     LLVMTypeRef luaJ_idivrr;
     LLVMTypeRef luaJ_powrr;
+    LLVMTypeRef luaJ_unm;
+    LLVMTypeRef luaJ_bnot;
+    LLVMTypeRef luaJ_not;
+    LLVMTypeRef luaV_objlen;
     LLVMTypeRef luaV_equalobj;
     LLVMTypeRef luaV_lessthan;
     LLVMTypeRef luaV_lessequal;
@@ -88,6 +92,10 @@ typedef struct luaJ_CompileState
     LLVMValueRef luaJ_modrr;
     LLVMValueRef luaJ_idivrr;
     LLVMValueRef luaJ_powrr;
+    LLVMValueRef luaJ_unm;
+    LLVMValueRef luaJ_bnot;
+    LLVMValueRef luaJ_not;
+    LLVMValueRef luaV_objlen;
     LLVMValueRef luaV_equalobj;
     LLVMValueRef luaV_lessthan;
     LLVMValueRef luaV_lessequal;
@@ -318,6 +326,35 @@ static void luaJ_powrr (lua_State *L, TValue *ra, TValue *rb, TValue *rc)
   }
 }
 
+static void luaJ_unm (lua_State *L, TValue *ra, TValue *rb)
+{
+  lua_Number nb;
+  if (ttisinteger(rb)) {
+    lua_Integer ib = ivalue(rb);
+    setivalue(ra, intop(-, 0, ib));
+  } else if (tonumber(rb, &nb)) {
+    setfltvalue(ra, luai_numunm(L, nb));
+  } else {
+    luaT_trybinTM(L, rb, rb, ra, TM_UNM);
+  }
+}
+
+static void luaJ_bnot (lua_State *L, TValue *ra, TValue *rb)
+{
+  lua_Integer ib;
+  if (tointeger(rb, &ib)) {
+    setivalue(ra, intop(^, ~l_castS2U(0), ib));
+  } else {
+    luaT_trybinTM(L, rb, rb, ra, TM_BNOT);
+  }
+}
+
+static void luaJ_not (lua_State *L, TValue *ra, TValue *rb)
+{
+  int res = l_isfalse(rb);
+  setbvalue(ra, res);
+}
+
 static void runtime_loadtypes (luaJ_Jit *Jit)
 {
   #define rt_loadtype(function, ret, ...) \
@@ -329,6 +366,9 @@ static void runtime_loadtypes (luaJ_Jit *Jit)
 
   #define rt_loadbinop(function) \
     rt_loadtype(function, LLVMVoidType(), lstate, tvalue, tvalue, tvalue)
+
+  #define rt_loadunop(function) \
+    rt_loadtype(function, LLVMVoidType(), lstate, tvalue, tvalue)
 
   LLVMTypeRef lstate = Jit->state_type;
   LLVMTypeRef tvalue = Jit->value_type;
@@ -345,6 +385,10 @@ static void runtime_loadtypes (luaJ_Jit *Jit)
   rt_loadbinop(luaJ_modrr);
   rt_loadbinop(luaJ_idivrr);
   rt_loadbinop(luaJ_powrr);
+  rt_loadunop(luaJ_unm);
+  rt_loadunop(luaJ_bnot);
+  rt_loadunop(luaJ_not);
+  rt_loadunop(luaV_objlen);
   rt_loadtype(luaV_equalobj, makeint_t(), lstate, tvalue, tvalue);
   rt_loadtype(luaV_lessthan, makeint_t(), lstate, tvalue, tvalue);
   rt_loadtype(luaV_lessequal, makeint_t(), lstate, tvalue, tvalue);
@@ -367,6 +411,10 @@ static void runtime_init (luaJ_CompileState *cs)
   rt_init(luaJ_modrr);
   rt_init(luaJ_idivrr);
   rt_init(luaJ_powrr);
+  rt_init(luaJ_unm);
+  rt_init(luaJ_bnot);
+  rt_init(luaJ_not);
+  rt_init(luaV_objlen);
   rt_init(luaV_equalobj);
   rt_init(luaV_lessthan);
   rt_init(luaV_lessequal);
@@ -390,6 +438,10 @@ static void runtime_link (luaJ_CompileState *cs)
   rt_link(luaJ_modrr);
   rt_link(luaJ_idivrr);
   rt_link(luaJ_powrr);
+  rt_link(luaJ_unm);
+  rt_link(luaJ_bnot);
+  rt_link(luaJ_not);
+  rt_link(luaV_objlen);
   rt_link(luaV_equalobj);
   rt_link(luaV_lessthan);
   rt_link(luaV_lessequal);
@@ -504,6 +556,17 @@ static void compile_binop (luaJ_CompileState *cs, LLVMValueRef op)
   LLVMBuildCall(cs->builder, op, args, 4, "");
 }
 
+static void compile_unop (luaJ_CompileState *cs, LLVMValueRef op)
+{
+  updatestack(cs);
+  LLVMValueRef args[] = {
+      cs->state,
+      gettvalue_r(cs, GETARG_A(cs->instr), "ra"),
+      gettvalue_rk(cs, GETARG_B(cs->instr), "rkb"),
+  };
+  LLVMBuildCall(cs->builder, op, args, 3, "");
+}
+
 static void compile_jmp (luaJ_CompileState *cs)
 {
   LLVMBuildBr(cs->builder, cs->blocks[cs->idx + GETARG_sBx(cs->instr) + 1]);
@@ -576,10 +639,10 @@ static void compile_opcode (luaJ_CompileState *cs)
       case OP_BXOR:     compile_binop(cs, runtime_call(cs, luaJ_bxorrr)); break;
       case OP_SHL:      compile_binop(cs, runtime_call(cs, luaJ_shlrr)); break;
       case OP_SHR:      compile_binop(cs, runtime_call(cs, luaJ_shrrr)); break;
-      case OP_UNM:      /* TODO */ break;
-      case OP_BNOT:     /* TODO */ break;
-      case OP_NOT:      /* TODO */ break;
-      case OP_LEN:      /* TODO */ break;
+      case OP_UNM:      compile_unop(cs, runtime_call(cs, luaJ_unm)); break;
+      case OP_BNOT:     compile_unop(cs, runtime_call(cs, luaJ_bnot)); break;
+      case OP_NOT:      compile_unop(cs, runtime_call(cs, luaJ_not)); break;
+      case OP_LEN:      compile_unop(cs, runtime_call(cs, luaV_objlen)); break;
       case OP_CONCAT:   /* TODO */ break;
       case OP_JMP:      compile_jmp(cs); break;
       case OP_EQ:       compile_cmp(cs); break;

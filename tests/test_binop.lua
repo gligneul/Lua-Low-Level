@@ -8,10 +8,9 @@
 local lll_test = require 'tests/lll_test' 
 
 -- Create all possible combinations of operations and values
--- local ops = {'+', '-', '*', '/', '&', '|', '~', '<<', '>>', '%', '//', '^'}
-local ops = {'+', '-', '*', '/', '&', '|', '~', '<<', '>>', '%', '//'}
-local values = {'-5000', '0', '123', '0.00001', '1.23', '10e999',
-        '"0"', '"15.4"', '"a"'}
+local ops = {'+', '-', '*', '/', '&', '|', '~', '<<', '>>', '%', '//', '^'}
+local values = {'nil', 'true', 'false', '-5000', '0', '123', '0.00001', '1.23',
+        '10e999', '"0"', '"15.4"', '"a"'}
 
 local functions = {}
 for _, op in ipairs(ops) do

@@ -15,6 +15,7 @@ local TEST_SUFFIX = '.lua'
 local modules = {
     'basic',
     'binop',
+    'unop',
     --'loadkx'
 }
 
