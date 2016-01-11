@@ -42,6 +42,23 @@ typedef struct luaJ_Jit
   LLVMTypeRef ci_type;
   LLVMTypeRef closure_type;
   LLVMTypeRef proto_type;
+  struct {                          /* runtime functions types */
+    LLVMTypeRef luaJ_addrr;
+    LLVMTypeRef luaJ_subrr;
+    LLVMTypeRef luaJ_mulrr;
+    LLVMTypeRef luaJ_divrr;
+    LLVMTypeRef luaJ_bandrr;
+    LLVMTypeRef luaJ_borrr;
+    LLVMTypeRef luaJ_bxorrr;
+    LLVMTypeRef luaJ_shlrr;
+    LLVMTypeRef luaJ_shrrr;
+    LLVMTypeRef luaJ_modrr;
+    LLVMTypeRef luaJ_idivrr;
+    LLVMTypeRef luaJ_powrr;
+    LLVMTypeRef luaV_equalobj;
+    LLVMTypeRef luaV_lessthan;
+    LLVMTypeRef luaV_lessequal;
+  } rttypes;
 } luaJ_Jit;
 static luaJ_Jit *Jit = NULL;
 
@@ -59,18 +76,18 @@ typedef struct luaJ_CompileState
   Instruction instr;            /* current instruction */
   LLVMBasicBlockRef block;      /* current block */
   struct {                      /* runtime functions */
-    LLVMValueRef runtime_addrr;
-    LLVMValueRef runtime_subrr;
-    LLVMValueRef runtime_mulrr;
-    LLVMValueRef runtime_divrr;
-    LLVMValueRef runtime_bandrr;
-    LLVMValueRef runtime_borrr;
-    LLVMValueRef runtime_bxorrr;
-    LLVMValueRef runtime_shlrr;
-    LLVMValueRef runtime_shrrr;
-    LLVMValueRef runtime_modrr;
-    LLVMValueRef runtime_idivrr;
-    LLVMValueRef runtime_powrr;
+    LLVMValueRef luaJ_addrr;
+    LLVMValueRef luaJ_subrr;
+    LLVMValueRef luaJ_mulrr;
+    LLVMValueRef luaJ_divrr;
+    LLVMValueRef luaJ_bandrr;
+    LLVMValueRef luaJ_borrr;
+    LLVMValueRef luaJ_bxorrr;
+    LLVMValueRef luaJ_shlrr;
+    LLVMValueRef luaJ_shrrr;
+    LLVMValueRef luaJ_modrr;
+    LLVMValueRef luaJ_idivrr;
+    LLVMValueRef luaJ_powrr;
     LLVMValueRef luaV_equalobj;
     LLVMValueRef luaV_lessthan;
     LLVMValueRef luaV_lessequal;
@@ -159,7 +176,7 @@ static LLVMValueRef gettvalue_k (luaJ_CompileState *cs, int arg,
 
 /* Runtime functions */
 
-static void runtime_addrr (lua_State *L, TValue *ra, TValue *rb, TValue *rc)
+static void luaJ_addrr (lua_State *L, TValue *ra, TValue *rb, TValue *rc)
 {
   lua_Number nb, nc;
   if (ttisinteger(rb) && ttisinteger(rc)) {
@@ -173,7 +190,7 @@ static void runtime_addrr (lua_State *L, TValue *ra, TValue *rb, TValue *rc)
   }
 }
 
-static void runtime_subrr (lua_State *L, TValue *ra, TValue *rb, TValue *rc)
+static void luaJ_subrr (lua_State *L, TValue *ra, TValue *rb, TValue *rc)
 {
   lua_Number nb, nc;
   if (ttisinteger(rb) && ttisinteger(rc)) {
@@ -187,7 +204,7 @@ static void runtime_subrr (lua_State *L, TValue *ra, TValue *rb, TValue *rc)
   }
 }
 
-static void runtime_mulrr (lua_State *L, TValue *ra, TValue *rb, TValue *rc)
+static void luaJ_mulrr (lua_State *L, TValue *ra, TValue *rb, TValue *rc)
 {
   lua_Number nb, nc;
   if (ttisinteger(rb) && ttisinteger(rc)) {
@@ -201,7 +218,7 @@ static void runtime_mulrr (lua_State *L, TValue *ra, TValue *rb, TValue *rc)
   }
 }
 
-static void runtime_divrr (lua_State *L, TValue *ra, TValue *rb, TValue *rc)
+static void luaJ_divrr (lua_State *L, TValue *ra, TValue *rb, TValue *rc)
 {
   lua_Number nb; lua_Number nc;
   if (tonumber(rb, &nb) && tonumber(rc, &nc)) {
@@ -211,7 +228,7 @@ static void runtime_divrr (lua_State *L, TValue *ra, TValue *rb, TValue *rc)
   }
 }
 
-static void runtime_bandrr (lua_State *L, TValue *ra, TValue *rb, TValue *rc)
+static void luaJ_bandrr (lua_State *L, TValue *ra, TValue *rb, TValue *rc)
 {
   lua_Integer ib, ic;
   if (tointeger(rb, &ib) && tointeger(rc, &ic)) {
@@ -221,7 +238,7 @@ static void runtime_bandrr (lua_State *L, TValue *ra, TValue *rb, TValue *rc)
   }
 }
 
-static void runtime_borrr (lua_State *L, TValue *ra, TValue *rb, TValue *rc)
+static void luaJ_borrr (lua_State *L, TValue *ra, TValue *rb, TValue *rc)
 {
   lua_Integer ib, ic;
   if (tointeger(rb, &ib) && tointeger(rc, &ic)) {
@@ -231,7 +248,7 @@ static void runtime_borrr (lua_State *L, TValue *ra, TValue *rb, TValue *rc)
   }
 }
 
-static void runtime_bxorrr (lua_State *L, TValue *ra, TValue *rb, TValue *rc)
+static void luaJ_bxorrr (lua_State *L, TValue *ra, TValue *rb, TValue *rc)
 {
   lua_Integer ib, ic;
   if (tointeger(rb, &ib) && tointeger(rc, &ic)) {
@@ -241,7 +258,7 @@ static void runtime_bxorrr (lua_State *L, TValue *ra, TValue *rb, TValue *rc)
   }
 }
 
-static void runtime_shlrr (lua_State *L, TValue *ra, TValue *rb, TValue *rc)
+static void luaJ_shlrr (lua_State *L, TValue *ra, TValue *rb, TValue *rc)
 {
   lua_Integer ib, ic;
   if (tointeger(rb, &ib) && tointeger(rc, &ic)) {
@@ -251,7 +268,7 @@ static void runtime_shlrr (lua_State *L, TValue *ra, TValue *rb, TValue *rc)
   }
 }
 
-static void runtime_shrrr (lua_State *L, TValue *ra, TValue *rb, TValue *rc)
+static void luaJ_shrrr (lua_State *L, TValue *ra, TValue *rb, TValue *rc)
 {
   lua_Integer ib, ic;
   if (tointeger(rb, &ib) && tointeger(rc, &ic)) {
@@ -261,7 +278,7 @@ static void runtime_shrrr (lua_State *L, TValue *ra, TValue *rb, TValue *rc)
   }
 }
 
-static void runtime_modrr (lua_State *L, TValue *ra, TValue *rb, TValue *rc)
+static void luaJ_modrr (lua_State *L, TValue *ra, TValue *rb, TValue *rc)
 {
   lua_Number nb; lua_Number nc;
   if (ttisinteger(rb) && ttisinteger(rc)) {
@@ -277,7 +294,7 @@ static void runtime_modrr (lua_State *L, TValue *ra, TValue *rb, TValue *rc)
   }
 }
 
-static void runtime_idivrr (lua_State *L, TValue *ra, TValue *rb, TValue *rc)
+static void luaJ_idivrr (lua_State *L, TValue *ra, TValue *rb, TValue *rc)
 {
   lua_Number nb, nc;
   if (ttisinteger(rb) && ttisinteger(rc)) {
@@ -291,7 +308,7 @@ static void runtime_idivrr (lua_State *L, TValue *ra, TValue *rb, TValue *rc)
   }
 }
 
-static void runtime_powrr (lua_State *L, TValue *ra, TValue *rb, TValue *rc)
+static void luaJ_powrr (lua_State *L, TValue *ra, TValue *rb, TValue *rc)
 {
   lua_Number nb, nc;
   if (tonumber(rb, &nb) && tonumber(rc, &nc)) {
@@ -301,68 +318,95 @@ static void runtime_powrr (lua_State *L, TValue *ra, TValue *rb, TValue *rc)
   }
 }
 
-static void declare_runtime (luaJ_CompileState *cs)
+static void runtime_loadtypes (luaJ_Jit *Jit)
 {
-  #define rt_declare(function, ret, ...) \
+  #define rt_loadtype(function, ret, ...) \
     do { \
       LLVMTypeRef params[] = {__VA_ARGS__}; \
       int nparams = sizeof(params) / sizeof(LLVMTypeRef); \
-      LLVMTypeRef type = LLVMFunctionType(ret, params, nparams, 0); \
-      cs->rt.function = LLVMAddFunction(cs->f->module, #function, type); \
+      Jit->rttypes.function = LLVMFunctionType(ret, params, nparams, 0); \
     } while (0)
 
-  #define declarebinop(function) \
-    rt_declare(function, LLVMVoidType(), lstate, tvalue, tvalue, tvalue)
+  #define rt_loadbinop(function) \
+    rt_loadtype(function, LLVMVoidType(), lstate, tvalue, tvalue, tvalue)
 
-  LLVMTypeRef lstate = cs->Jit->state_type;
-  LLVMTypeRef tvalue = cs->Jit->value_type;
+  LLVMTypeRef lstate = Jit->state_type;
+  LLVMTypeRef tvalue = Jit->value_type;
 
-  declarebinop(runtime_addrr);
-  declarebinop(runtime_subrr);
-  declarebinop(runtime_mulrr);
-  declarebinop(runtime_divrr);
-  declarebinop(runtime_bandrr);
-  declarebinop(runtime_borrr);
-  declarebinop(runtime_bxorrr);
-  declarebinop(runtime_shlrr);
-  declarebinop(runtime_shrrr);
-  declarebinop(runtime_modrr);
-  declarebinop(runtime_idivrr);
-  declarebinop(runtime_powrr);
-
-  rt_declare(luaV_equalobj, makeint_t(), lstate, tvalue, tvalue);
-  rt_declare(luaV_lessthan, makeint_t(), lstate, tvalue, tvalue);
-  rt_declare(luaV_lessequal, makeint_t(), lstate, tvalue, tvalue);
+  rt_loadbinop(luaJ_addrr);
+  rt_loadbinop(luaJ_subrr);
+  rt_loadbinop(luaJ_mulrr);
+  rt_loadbinop(luaJ_divrr);
+  rt_loadbinop(luaJ_bandrr);
+  rt_loadbinop(luaJ_borrr);
+  rt_loadbinop(luaJ_bxorrr);
+  rt_loadbinop(luaJ_shlrr);
+  rt_loadbinop(luaJ_shrrr);
+  rt_loadbinop(luaJ_modrr);
+  rt_loadbinop(luaJ_idivrr);
+  rt_loadbinop(luaJ_powrr);
+  rt_loadtype(luaV_equalobj, makeint_t(), lstate, tvalue, tvalue);
+  rt_loadtype(luaV_lessthan, makeint_t(), lstate, tvalue, tvalue);
+  rt_loadtype(luaV_lessequal, makeint_t(), lstate, tvalue, tvalue);
 }
 
-static void link_runtime (luaJ_CompileState *cs)
+static void runtime_init (luaJ_CompileState *cs)
+{
+  #define rt_init(function) \
+    cs->rt.function = NULL
+
+  rt_init(luaJ_addrr);
+  rt_init(luaJ_subrr);
+  rt_init(luaJ_mulrr);
+  rt_init(luaJ_divrr);
+  rt_init(luaJ_bandrr);
+  rt_init(luaJ_borrr);
+  rt_init(luaJ_bxorrr);
+  rt_init(luaJ_shlrr);
+  rt_init(luaJ_shrrr);
+  rt_init(luaJ_modrr);
+  rt_init(luaJ_idivrr);
+  rt_init(luaJ_powrr);
+  rt_init(luaV_equalobj);
+  rt_init(luaV_lessthan);
+  rt_init(luaV_lessequal);
+}
+
+static void runtime_link (luaJ_CompileState *cs)
 {
   #define rt_link(function) \
-    LLVMAddGlobalMapping(cs->Jit->engine, cs->rt.function, function)
+    if (cs->rt.function) \
+      LLVMAddGlobalMapping(cs->Jit->engine, cs->rt.function, function)
 
-  rt_link(runtime_addrr);
-  rt_link(runtime_subrr);
-  rt_link(runtime_mulrr);
-  rt_link(runtime_divrr);
-  rt_link(runtime_bandrr);
-  rt_link(runtime_borrr);
-  rt_link(runtime_bxorrr);
-  rt_link(runtime_shlrr);
-  rt_link(runtime_shrrr);
-  rt_link(runtime_modrr);
-  rt_link(runtime_idivrr);
-  rt_link(runtime_powrr);
+  rt_link(luaJ_addrr);
+  rt_link(luaJ_subrr);
+  rt_link(luaJ_mulrr);
+  rt_link(luaJ_divrr);
+  rt_link(luaJ_bandrr);
+  rt_link(luaJ_borrr);
+  rt_link(luaJ_bxorrr);
+  rt_link(luaJ_shlrr);
+  rt_link(luaJ_shrrr);
+  rt_link(luaJ_modrr);
+  rt_link(luaJ_idivrr);
+  rt_link(luaJ_powrr);
   rt_link(luaV_equalobj);
   rt_link(luaV_lessthan);
   rt_link(luaV_lessequal);
 }
+
+#define runtime_call(cs, function) \
+  (cs->rt.function ? \
+    (cs->rt.function) : \
+    (cs->rt.function = LLVMAddFunction(cs->f->module, #function, \
+                                       cs->Jit->rttypes.function)))
 
 
 
 /* Compiles the bytecode into LLVM IR */
 
 #define updatestack(cs) \
-  cs->func = loadfield(cs, cs->ci, cs->Jit->value_type, CallInfo, func);
+  cs->func = loadfield(cs, cs->ci, cs->Jit->value_type, CallInfo, func)
 
 static void createblocks (luaJ_CompileState *cs)
 {
@@ -476,9 +520,9 @@ static void compile_cmp (luaJ_CompileState *cs)
 
   LLVMValueRef function = NULL;
   switch (GET_OPCODE(cs->instr)) {
-    case OP_EQ: function = cs->rt.luaV_equalobj; break;
-    case OP_LT: function = cs->rt.luaV_lessthan; break;
-    case OP_LE: function = cs->rt.luaV_lessequal; break;
+    case OP_EQ: function = runtime_call(cs, luaV_equalobj); break;
+    case OP_LT: function = runtime_call(cs, luaV_lessthan); break;
+    case OP_LE: function = runtime_call(cs, luaV_lessequal); break;
     default:    lua_assert(false);
   }
   LLVMValueRef result = LLVMBuildCall(cs->builder, function, args, 3, "");
@@ -520,18 +564,18 @@ static void compile_opcode (luaJ_CompileState *cs)
       case OP_SETTABLE: /* TODO */ break;
       case OP_NEWTABLE: /* TODO */ break;
       case OP_SELF:     /* TODO */ break;
-      case OP_ADD:      compile_binop(cs, cs->rt.runtime_addrr); break;
-      case OP_SUB:      compile_binop(cs, cs->rt.runtime_subrr); break;
-      case OP_MUL:      compile_binop(cs, cs->rt.runtime_mulrr); break;
-      case OP_MOD:      compile_binop(cs, cs->rt.runtime_modrr); break;
-      case OP_POW:      compile_binop(cs, cs->rt.runtime_powrr); break;
-      case OP_DIV:      compile_binop(cs, cs->rt.runtime_divrr); break;
-      case OP_IDIV:     compile_binop(cs, cs->rt.runtime_idivrr); break;
-      case OP_BAND:     compile_binop(cs, cs->rt.runtime_bandrr); break;
-      case OP_BOR:      compile_binop(cs, cs->rt.runtime_borrr); break;
-      case OP_BXOR:     compile_binop(cs, cs->rt.runtime_bxorrr); break;
-      case OP_SHL:      compile_binop(cs, cs->rt.runtime_shlrr); break;
-      case OP_SHR:      compile_binop(cs, cs->rt.runtime_shrrr); break;
+      case OP_ADD:      compile_binop(cs, runtime_call(cs, luaJ_addrr)); break;
+      case OP_SUB:      compile_binop(cs, runtime_call(cs, luaJ_subrr)); break;
+      case OP_MUL:      compile_binop(cs, runtime_call(cs, luaJ_mulrr)); break;
+      case OP_MOD:      compile_binop(cs, runtime_call(cs, luaJ_modrr)); break;
+      case OP_POW:      compile_binop(cs, runtime_call(cs, luaJ_powrr)); break;
+      case OP_DIV:      compile_binop(cs, runtime_call(cs, luaJ_divrr)); break;
+      case OP_IDIV:     compile_binop(cs, runtime_call(cs, luaJ_idivrr)); break;
+      case OP_BAND:     compile_binop(cs, runtime_call(cs, luaJ_bandrr)); break;
+      case OP_BOR:      compile_binop(cs, runtime_call(cs, luaJ_borrr)); break;
+      case OP_BXOR:     compile_binop(cs, runtime_call(cs, luaJ_bxorrr)); break;
+      case OP_SHL:      compile_binop(cs, runtime_call(cs, luaJ_shlrr)); break;
+      case OP_SHR:      compile_binop(cs, runtime_call(cs, luaJ_shrrr)); break;
       case OP_UNM:      /* TODO */ break;
       case OP_BNOT:     /* TODO */ break;
       case OP_NOT:      /* TODO */ break;
@@ -566,8 +610,8 @@ static void compile (luaJ_Jit *Jit, luaJ_Function *f)
   cs.builder = LLVMCreateBuilder();
   LLVMBasicBlockRef blocks[cs.proto->sizecode];
   cs.blocks = blocks;
-  
-  declare_runtime(&cs);
+
+  runtime_init(&cs);
   createblocks(&cs);
 
   for (int i = 0; i < cs.proto->sizecode; ++i) {
@@ -593,7 +637,7 @@ static void compile (luaJ_Jit *Jit, luaJ_Function *f)
   }
 
   LLVMAddModule(Jit->engine, f->module);
-  link_runtime(&cs);
+  runtime_link(&cs);
 }
 
 
@@ -618,6 +662,7 @@ static void initJit (lua_State *L)
   Jit->value_type = makestruct_t(TValue);
   Jit->closure_type = makestruct_t(Closure);
   Jit->proto_type = makestruct_t(Proto);
+  runtime_loadtypes(Jit);
 }
 
 static void precall (lua_State *L, luaJ_Function *f)
