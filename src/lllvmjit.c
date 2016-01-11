@@ -59,7 +59,18 @@ typedef struct luaJ_CompileState
   Instruction instr;            /* current instruction */
   LLVMBasicBlockRef block;      /* current block */
   struct {                      /* runtime functions */
-    LLVMValueRef runtime_arith_rr;
+    LLVMValueRef runtime_addrr;
+    LLVMValueRef runtime_subrr;
+    LLVMValueRef runtime_mulrr;
+    LLVMValueRef runtime_divrr;
+    LLVMValueRef runtime_bandrr;
+    LLVMValueRef runtime_borrr;
+    LLVMValueRef runtime_bxorrr;
+    LLVMValueRef runtime_shlrr;
+    LLVMValueRef runtime_shrrr;
+    LLVMValueRef runtime_modrr;
+    LLVMValueRef runtime_idivrr;
+    LLVMValueRef runtime_powrr;
     LLVMValueRef luaV_equalobj;
     LLVMValueRef luaV_lessthan;
     LLVMValueRef luaV_lessequal;
@@ -148,9 +159,9 @@ static LLVMValueRef gettvalue_k (luaJ_CompileState *cs, int arg,
 
 /* Runtime functions */
 
-static void runtime_arith_rr (lua_State *L, TValue *ra, TValue *rb, TValue *rc)
+static void runtime_addrr (lua_State *L, TValue *ra, TValue *rb, TValue *rc)
 {
-  lua_Number nb; lua_Number nc;
+  lua_Number nb, nc;
   if (ttisinteger(rb) && ttisinteger(rc)) {
     lua_Integer ib = ivalue(rb);
     lua_Integer ic = ivalue(rc);
@@ -159,6 +170,134 @@ static void runtime_arith_rr (lua_State *L, TValue *ra, TValue *rb, TValue *rc)
     setfltvalue(ra, luai_numadd(L, nb, nc));
   } else {
     luaT_trybinTM(L, rb, rc, ra, TM_ADD);
+  }
+}
+
+static void runtime_subrr (lua_State *L, TValue *ra, TValue *rb, TValue *rc)
+{
+  lua_Number nb, nc;
+  if (ttisinteger(rb) && ttisinteger(rc)) {
+    lua_Integer ib = ivalue(rb);
+    lua_Integer ic = ivalue(rc);
+    setivalue(ra, intop(-, ib, ic));
+  } else if (tonumber(rb, &nb) && tonumber(rc, &nc)) {
+    setfltvalue(ra, luai_numsub(L, nb, nc));
+  } else {
+    luaT_trybinTM(L, rb, rc, ra, TM_SUB);
+  }
+}
+
+static void runtime_mulrr (lua_State *L, TValue *ra, TValue *rb, TValue *rc)
+{
+  lua_Number nb, nc;
+  if (ttisinteger(rb) && ttisinteger(rc)) {
+    lua_Integer ib = ivalue(rb);
+    lua_Integer ic = ivalue(rc);
+    setivalue(ra, intop(*, ib, ic));
+  } else if (tonumber(rb, &nb) && tonumber(rc, &nc)) {
+    setfltvalue(ra, luai_nummul(L, nb, nc));
+  } else {
+    luaT_trybinTM(L, rb, rc, ra, TM_MUL);
+  }
+}
+
+static void runtime_divrr (lua_State *L, TValue *ra, TValue *rb, TValue *rc)
+{
+  lua_Number nb; lua_Number nc;
+  if (tonumber(rb, &nb) && tonumber(rc, &nc)) {
+    setfltvalue(ra, luai_numdiv(L, nb, nc));
+  } else {
+    luaT_trybinTM(L, rb, rc, ra, TM_DIV);
+  }
+}
+
+static void runtime_bandrr (lua_State *L, TValue *ra, TValue *rb, TValue *rc)
+{
+  lua_Integer ib, ic;
+  if (tointeger(rb, &ib) && tointeger(rc, &ic)) {
+    setivalue(ra, intop(&, ib, ic));
+  } else {
+    luaT_trybinTM(L, rb, rc, ra, TM_BAND);
+  }
+}
+
+static void runtime_borrr (lua_State *L, TValue *ra, TValue *rb, TValue *rc)
+{
+  lua_Integer ib, ic;
+  if (tointeger(rb, &ib) && tointeger(rc, &ic)) {
+    setivalue(ra, intop(|, ib, ic));
+  } else {
+    luaT_trybinTM(L, rb, rc, ra, TM_BOR);
+  }
+}
+
+static void runtime_bxorrr (lua_State *L, TValue *ra, TValue *rb, TValue *rc)
+{
+  lua_Integer ib, ic;
+  if (tointeger(rb, &ib) && tointeger(rc, &ic)) {
+    setivalue(ra, intop(^, ib, ic));
+  } else {
+    luaT_trybinTM(L, rb, rc, ra, TM_BXOR);
+  }
+}
+
+static void runtime_shlrr (lua_State *L, TValue *ra, TValue *rb, TValue *rc)
+{
+  lua_Integer ib, ic;
+  if (tointeger(rb, &ib) && tointeger(rc, &ic)) {
+    setivalue(ra, luaV_shiftl(ib, ic));
+  } else {
+    luaT_trybinTM(L, rb, rc, ra, TM_SHL);
+  }
+}
+
+static void runtime_shrrr (lua_State *L, TValue *ra, TValue *rb, TValue *rc)
+{
+  lua_Integer ib, ic;
+  if (tointeger(rb, &ib) && tointeger(rc, &ic)) {
+    setivalue(ra, luaV_shiftl(ib, -ic));
+  } else {
+    luaT_trybinTM(L, rb, rc, ra, TM_SHR);
+  }
+}
+
+static void runtime_modrr (lua_State *L, TValue *ra, TValue *rb, TValue *rc)
+{
+  lua_Number nb; lua_Number nc;
+  if (ttisinteger(rb) && ttisinteger(rc)) {
+    lua_Integer ib = ivalue(rb);
+    lua_Integer ic = ivalue(rc);
+    setivalue(ra, luaV_mod(L, ib, ic));
+  } else if (tonumber(rb, &nb) && tonumber(rc, &nc)){
+    lua_Number m;
+    luai_nummod(L, nb, nc, m);
+    setfltvalue(ra, m);
+  } else {
+    luaT_trybinTM(L, rb, rc, ra, TM_MOD);
+  }
+}
+
+static void runtime_idivrr (lua_State *L, TValue *ra, TValue *rb, TValue *rc)
+{
+  lua_Number nb, nc;
+  if (ttisinteger(rb) && ttisinteger(rc)) {
+    lua_Integer ib = ivalue(rb);
+    lua_Integer ic = ivalue(rc);
+    setivalue(ra, luaV_div(L, ib, ic));
+  } else if (tonumber(rb, &nb) && tonumber(rc, &nc)) {
+    setfltvalue(ra, luai_numidiv(L, nb, nc));
+  } else {
+    luaT_trybinTM(L, rb, rc, ra, TM_IDIV);
+  }
+}
+
+static void runtime_powrr (lua_State *L, TValue *ra, TValue *rb, TValue *rc)
+{
+  lua_Number nb, nc;
+  if (tonumber(rb, &nb) && tonumber(rc, &nc)) {
+    setfltvalue(ra, luai_numpow(L, nb, nc));
+  } else {
+    luaT_trybinTM(L, rb, rc, ra, TM_POW);
   }
 }
 
@@ -172,9 +311,25 @@ static void declare_runtime (luaJ_CompileState *cs)
       cs->rt.function = LLVMAddFunction(cs->f->module, #function, type); \
     } while (0)
 
+  #define declarebinop(function) \
+    rt_declare(function, LLVMVoidType(), lstate, tvalue, tvalue, tvalue)
+
   LLVMTypeRef lstate = cs->Jit->state_type;
   LLVMTypeRef tvalue = cs->Jit->value_type;
-  rt_declare(runtime_arith_rr, LLVMVoidType(), lstate, tvalue, tvalue, tvalue);
+
+  declarebinop(runtime_addrr);
+  declarebinop(runtime_subrr);
+  declarebinop(runtime_mulrr);
+  declarebinop(runtime_divrr);
+  declarebinop(runtime_bandrr);
+  declarebinop(runtime_borrr);
+  declarebinop(runtime_bxorrr);
+  declarebinop(runtime_shlrr);
+  declarebinop(runtime_shrrr);
+  declarebinop(runtime_modrr);
+  declarebinop(runtime_idivrr);
+  declarebinop(runtime_powrr);
+
   rt_declare(luaV_equalobj, makeint_t(), lstate, tvalue, tvalue);
   rt_declare(luaV_lessthan, makeint_t(), lstate, tvalue, tvalue);
   rt_declare(luaV_lessequal, makeint_t(), lstate, tvalue, tvalue);
@@ -185,7 +340,18 @@ static void link_runtime (luaJ_CompileState *cs)
   #define rt_link(function) \
     LLVMAddGlobalMapping(cs->Jit->engine, cs->rt.function, function)
 
-  rt_link(runtime_arith_rr);
+  rt_link(runtime_addrr);
+  rt_link(runtime_subrr);
+  rt_link(runtime_mulrr);
+  rt_link(runtime_divrr);
+  rt_link(runtime_bandrr);
+  rt_link(runtime_borrr);
+  rt_link(runtime_bxorrr);
+  rt_link(runtime_shlrr);
+  rt_link(runtime_shrrr);
+  rt_link(runtime_modrr);
+  rt_link(runtime_idivrr);
+  rt_link(runtime_powrr);
   rt_link(luaV_equalobj);
   rt_link(luaV_lessthan);
   rt_link(luaV_lessequal);
@@ -282,7 +448,7 @@ static void compile_loadnil (luaJ_CompileState *cs)
   }
 }
 
-static void compile_arith (luaJ_CompileState *cs)
+static void compile_binop (luaJ_CompileState *cs, LLVMValueRef op)
 {
   updatestack(cs);
   LLVMValueRef args[] = {
@@ -291,7 +457,7 @@ static void compile_arith (luaJ_CompileState *cs)
       gettvalue_rk(cs, GETARG_B(cs->instr), "rkb"),
       gettvalue_rk(cs, GETARG_C(cs->instr), "rkc")
   };
-  LLVMBuildCall(cs->builder, cs->rt.runtime_arith_rr, args, 4, "");
+  LLVMBuildCall(cs->builder, op, args, 4, "");
 }
 
 static void compile_jmp (luaJ_CompileState *cs)
@@ -342,7 +508,7 @@ static void compile_opcode (luaJ_CompileState *cs)
 {
     switch (GET_OPCODE(cs->instr)) {
       case OP_MOVE:     compile_move(cs); break;
-      case OP_LOADK:    /* bellow */
+      case OP_LOADK:    compile_loadk(cs); break;
       case OP_LOADKX:   compile_loadk(cs); break;
       case OP_LOADBOOL: compile_loadbool(cs); break;
       case OP_LOADNIL:  compile_loadnil(cs); break;
@@ -354,26 +520,26 @@ static void compile_opcode (luaJ_CompileState *cs)
       case OP_SETTABLE: /* TODO */ break;
       case OP_NEWTABLE: /* TODO */ break;
       case OP_SELF:     /* TODO */ break;
-      case OP_ADD:      compile_arith(cs); break;
-      case OP_SUB:      /* TODO */ break;
-      case OP_MUL:      /* TODO */ break;
-      case OP_MOD:      /* TODO */ break;
-      case OP_POW:      /* TODO */ break;
-      case OP_DIV:      /* TODO */ break;
-      case OP_IDIV:     /* TODO */ break;
-      case OP_BAND:     /* TODO */ break;
-      case OP_BOR:      /* TODO */ break;
-      case OP_BXOR:     /* TODO */ break;
-      case OP_SHL:      /* TODO */ break;
-      case OP_SHR:      /* TODO */ break;
+      case OP_ADD:      compile_binop(cs, cs->rt.runtime_addrr); break;
+      case OP_SUB:      compile_binop(cs, cs->rt.runtime_subrr); break;
+      case OP_MUL:      compile_binop(cs, cs->rt.runtime_mulrr); break;
+      case OP_MOD:      compile_binop(cs, cs->rt.runtime_modrr); break;
+      case OP_POW:      compile_binop(cs, cs->rt.runtime_powrr); break;
+      case OP_DIV:      compile_binop(cs, cs->rt.runtime_divrr); break;
+      case OP_IDIV:     compile_binop(cs, cs->rt.runtime_idivrr); break;
+      case OP_BAND:     compile_binop(cs, cs->rt.runtime_bandrr); break;
+      case OP_BOR:      compile_binop(cs, cs->rt.runtime_borrr); break;
+      case OP_BXOR:     compile_binop(cs, cs->rt.runtime_bxorrr); break;
+      case OP_SHL:      compile_binop(cs, cs->rt.runtime_shlrr); break;
+      case OP_SHR:      compile_binop(cs, cs->rt.runtime_shrrr); break;
       case OP_UNM:      /* TODO */ break;
       case OP_BNOT:     /* TODO */ break;
       case OP_NOT:      /* TODO */ break;
       case OP_LEN:      /* TODO */ break;
       case OP_CONCAT:   /* TODO */ break;
       case OP_JMP:      compile_jmp(cs); break;
-      case OP_EQ:       /* bellow */
-      case OP_LT:       /* bellow */
+      case OP_EQ:       compile_cmp(cs); break;
+      case OP_LT:       compile_cmp(cs); break;
       case OP_LE:       compile_cmp(cs); break;
       case OP_TEST:     /* TODO */ break;
       case OP_TESTSET:  /* TODO */ break;

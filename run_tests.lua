@@ -14,7 +14,7 @@ local TEST_SUFFIX = '.lua'
 -- Declaraion of test modules
 local modules = {
     'basic',
-    'arith',
+    'binop',
     --'loadkx'
 }
 
