@@ -16,6 +16,7 @@ local modules = {
     'basic',
     'binop',
     'unop',
+    'test',
     --'loadkx'
 }
 

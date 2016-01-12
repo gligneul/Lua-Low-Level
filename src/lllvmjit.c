@@ -23,6 +23,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 
 /* Type definitions */
@@ -57,9 +58,10 @@ typedef struct luaJ_Jit
     LLVMTypeRef luaJ_unm;
     LLVMTypeRef luaJ_bnot;
     LLVMTypeRef luaJ_not;
+    LLVMTypeRef luaJ_test;
+    LLVMTypeRef luaJ_checkcg;
     LLVMTypeRef luaV_objlen;
     LLVMTypeRef luaV_concat;
-    LLVMTypeRef luaJ_checkcg;
     LLVMTypeRef luaV_equalobj;
     LLVMTypeRef luaV_lessthan;
     LLVMTypeRef luaV_lessequal;
@@ -96,9 +98,10 @@ typedef struct luaJ_CompileState
     LLVMValueRef luaJ_unm;
     LLVMValueRef luaJ_bnot;
     LLVMValueRef luaJ_not;
+    LLVMValueRef luaJ_test;
+    LLVMValueRef luaJ_checkcg;
     LLVMValueRef luaV_objlen;
     LLVMValueRef luaV_concat;
-    LLVMValueRef luaJ_checkcg;
     LLVMValueRef luaV_equalobj;
     LLVMValueRef luaV_lessthan;
     LLVMValueRef luaV_lessequal;
@@ -133,6 +136,14 @@ static LLVMTypeRef makenamedstruct_t (const char *name, size_t size)
   LLVMBuildPointerCast(builder, \
       LLVMBuildGlobalString(builder, str, ""), makestring_t(), "")
 
+/* Converts integer $value to a boolean */
+#define tobool(builder, i, name) \
+  LLVMBuildICmp(builder, LLVMIntNE, makeint(0), i, name)
+
+
+
+/* Struct access */
+
 #define getfieldptr(cs, value, fieldtype, strukt, field) \
   getfieldbyoffset(cs, value, fieldtype, offsetof(strukt, field), #field "_ptr")
 
@@ -150,14 +161,9 @@ LLVMValueRef getfieldbyoffset (luaJ_CompileState *cs, LLVMValueRef value,
   return LLVMBuildBitCast(cs->builder, element, makeptr_t(fieldtype), name);
 }
 
-#if 0
-static LLVMValueRef makeprintf (LLVMModuleRef module)
-{
-  LLVMTypeRef pf_params[] = {makestring_t()};
-  LLVMTypeRef pf_type = LLVMFunctionType(LLVMInt32Type(), pf_params, 1, 1);
-  return LLVMAddFunction(module, "printf", pf_type);
-}
-#endif
+
+
+/* Lua stack manipulation */
 
 static LLVMValueRef gettvaluer (luaJ_CompileState *cs, int arg,
         const char* name)
@@ -182,6 +188,44 @@ static LLVMValueRef gettvaluek (luaJ_CompileState *cs, int arg,
   LLVMBuildLoad(cs->builder, \
       LLVMBuildBitCast(cs->builder, cs->func, makeptr_t(type), name "_ptr"), \
       name)
+
+static void setregister (LLVMBuilderRef builder, LLVMValueRef reg,
+                         LLVMValueRef value)
+{
+  LLVMValueRef value_iptr =
+      LLVMBuildBitCast(builder, value, makeptr_t(makesizeof_t(TValue)), "");
+  LLVMValueRef value_i = LLVMBuildLoad(builder, value_iptr, "");
+  LLVMValueRef reg_iptr =
+      LLVMBuildBitCast(builder, reg, makeptr_t(makesizeof_t(TValue)), "");
+  LLVMBuildStore(builder, value_i, reg_iptr);
+}
+
+static void settop (luaJ_CompileState *cs, int offset)
+{
+  LLVMValueRef value = gettvaluer(cs, offset, "topvalue");
+  LLVMValueRef top =
+        getfieldptr(cs, cs->state, cs->Jit->value_type, lua_State, top);
+  LLVMBuildStore(cs->builder, value, top);
+}
+
+
+
+/* Basic block functions */
+
+#if 0 /* unused */
+/* Creates a new subblock, and inserts it after @previousblock. */
+static LLVMBasicBlockRef addsubblock (luaJ_CompileState *cs,
+        LLVMBasicBlockRef mainblock, LLVMBasicBlockRef previousblock,
+        const char* suffix)
+{
+  const char *basename = LLVMGetValueName(LLVMBasicBlockAsValue(mainblock));
+  char newname[strlen(basename) + strlen(suffix) + 2];
+  sprintf(newname, "%s.%s", basename, suffix);
+  LLVMBasicBlockRef newblock = LLVMAppendBasicBlock(cs->f->value, newname);
+  LLVMMoveBasicBlockAfter(newblock, previousblock);
+  return newblock;
+}
+#endif
 
 
 
@@ -358,6 +402,11 @@ static void luaJ_not (lua_State *L, TValue *ra, TValue *rb)
   setbvalue(ra, res);
 }
 
+static int luaJ_test (int c, TValue *r)
+{
+  return c ? l_isfalse(r) : !l_isfalse(r);
+}
+
 static void luaJ_checkcg (lua_State *L, CallInfo *ci, TValue *c)
 {
   // From lvm.c checkGC(L,c)
@@ -401,9 +450,10 @@ static void runtime_loadtypes (luaJ_Jit *Jit)
   rt_loadunop(luaJ_unm);
   rt_loadunop(luaJ_bnot);
   rt_loadunop(luaJ_not);
+  rt_loadtype(luaJ_test, makeint_t(), makeint_t(), tvalue);
+  rt_loadtype(luaJ_checkcg, LLVMVoidType(), lstate, ci, tvalue);
   rt_loadunop(luaV_objlen);
   rt_loadtype(luaV_concat, LLVMVoidType(), lstate, makeint_t());
-  rt_loadtype(luaJ_checkcg, LLVMVoidType(), lstate, ci, tvalue);
   rt_loadtype(luaV_equalobj, makeint_t(), lstate, tvalue, tvalue);
   rt_loadtype(luaV_lessthan, makeint_t(), lstate, tvalue, tvalue);
   rt_loadtype(luaV_lessequal, makeint_t(), lstate, tvalue, tvalue);
@@ -429,9 +479,10 @@ static void runtime_init (luaJ_CompileState *cs)
   rt_init(luaJ_unm);
   rt_init(luaJ_bnot);
   rt_init(luaJ_not);
+  rt_init(luaJ_test);
+  rt_init(luaJ_checkcg);
   rt_init(luaV_objlen);
   rt_init(luaV_concat);
-  rt_init(luaJ_checkcg);
   rt_init(luaV_equalobj);
   rt_init(luaV_lessthan);
   rt_init(luaV_lessequal);
@@ -458,9 +509,10 @@ static void runtime_link (luaJ_CompileState *cs)
   rt_link(luaJ_unm);
   rt_link(luaJ_bnot);
   rt_link(luaJ_not);
+  rt_link(luaJ_test);
+  rt_link(luaJ_checkcg);
   rt_link(luaV_objlen);
   rt_link(luaV_concat);
-  rt_link(luaJ_checkcg);
   rt_link(luaV_equalobj);
   rt_link(luaV_lessthan);
   rt_link(luaV_lessequal);
@@ -497,25 +549,6 @@ static void createblocks (luaJ_CompileState *cs)
   }
 
   LLVMBuildBr(cs->builder, cs->blocks[0]);
-}
-
-static void setregister (LLVMBuilderRef builder, LLVMValueRef reg,
-                         LLVMValueRef value)
-{
-  LLVMValueRef value_iptr =
-      LLVMBuildBitCast(builder, value, makeptr_t(makesizeof_t(TValue)), "");
-  LLVMValueRef value_i = LLVMBuildLoad(builder, value_iptr, "");
-  LLVMValueRef reg_iptr =
-      LLVMBuildBitCast(builder, reg, makeptr_t(makesizeof_t(TValue)), "");
-  LLVMBuildStore(builder, value_i, reg_iptr);
-}
-
-static void settop (luaJ_CompileState *cs, int offset)
-{
-  LLVMValueRef value = gettvaluer(cs, offset, "topvalue");
-  LLVMValueRef top =
-        getfieldptr(cs, cs->state, cs->Jit->value_type, lua_State, top);
-  LLVMBuildStore(cs->builder, value, top);
 }
 
 static void compile_checkcg (luaJ_CompileState *cs, LLVMValueRef reg)
@@ -646,6 +679,21 @@ static void compile_cmp (luaJ_CompileState *cs)
   LLVMBuildCondBr(cs->builder, cmp, next_block, jmp_block);
 }
 
+static void compile_test (luaJ_CompileState *cs)
+{
+  updatestack(cs);
+  LLVMValueRef function = runtime_call(cs, luaJ_test);
+  LLVMValueRef params[] = {
+    makeint(GETARG_C(cs->instr)),
+    gettvaluer(cs, GETARG_A(cs->instr), "ra")
+  };
+  LLVMValueRef ret = LLVMBuildCall(cs->builder, function, params, 2, "test");
+  LLVMValueRef test = tobool(cs->builder, ret, "test");
+  LLVMBasicBlockRef nextblock = cs->blocks[cs->idx + 2];
+  LLVMBasicBlockRef jmpblock = cs->blocks[cs->idx + 1];
+  LLVMBuildCondBr(cs->builder, test, nextblock, jmpblock);
+}
+
 static void compile_return (luaJ_CompileState *cs)
 {
   int b = GETARG_B(cs->instr);
@@ -698,7 +746,7 @@ static void compile_opcode (luaJ_CompileState *cs)
       case OP_EQ:       compile_cmp(cs); break;
       case OP_LT:       compile_cmp(cs); break;
       case OP_LE:       compile_cmp(cs); break;
-      case OP_TEST:     /* TODO */ break;
+      case OP_TEST:     compile_test(cs); break;
       case OP_TESTSET:  /* TODO */ break;
       case OP_CALL:     /* TODO */ break;
       case OP_TAILCALL: /* TODO */ break;
@@ -733,8 +781,10 @@ static void compile (luaJ_Jit *Jit, luaJ_Function *f)
     cs.block = blocks[i];
     LLVMPositionBuilderAtEnd(cs.builder, cs.block);
     compile_opcode(&cs);
-    if (LLVMGetBasicBlockTerminator(cs.block) == NULL)
+    if (LLVMGetBasicBlockTerminator(cs.block) == NULL) {
+      LLVMPositionBuilderAtEnd(cs.builder, cs.block);
       LLVMBuildBr(cs.builder, blocks[i + 1]);
+    }
   }
 
   LLVMDisposeBuilder(cs.builder);
