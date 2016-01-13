@@ -3,7 +3,7 @@
 -- Author: Gabriel de Quadros Ligneul
 -- Copyright Notice for LLL: see lllvmjit.h
 --
--- lll_test.lua
+-- executetests.lua
 -- Barebone for creating tests for LLL
 
 --- Compares two Lua values

@@ -212,7 +212,6 @@ static void settop (luaJ_CompileState *cs, int offset)
 
 /* Basic block functions */
 
-#if 0 /* unused */
 /* Creates a new subblock, and inserts it after @previousblock. */
 static LLVMBasicBlockRef addsubblock (luaJ_CompileState *cs,
         LLVMBasicBlockRef mainblock, LLVMBasicBlockRef previousblock,
@@ -225,7 +224,6 @@ static LLVMBasicBlockRef addsubblock (luaJ_CompileState *cs,
   LLVMMoveBasicBlockAfter(newblock, previousblock);
   return newblock;
 }
-#endif
 
 
 
@@ -398,6 +396,7 @@ static void luaJ_bnot (lua_State *L, TValue *ra, TValue *rb)
 
 static void luaJ_not (lua_State *L, TValue *ra, TValue *rb)
 {
+  (void)L;
   int res = l_isfalse(rb);
   setbvalue(ra, res);
 }
@@ -683,15 +682,33 @@ static void compile_test (luaJ_CompileState *cs)
 {
   updatestack(cs);
   LLVMValueRef function = runtime_call(cs, luaJ_test);
-  LLVMValueRef params[] = {
-    makeint(GETARG_C(cs->instr)),
-    gettvaluer(cs, GETARG_A(cs->instr), "ra")
-  };
+  LLVMValueRef ra = gettvaluer(cs, GETARG_A(cs->instr), "ra");
+  LLVMValueRef params[] = {makeint(GETARG_C(cs->instr)), ra};
   LLVMValueRef ret = LLVMBuildCall(cs->builder, function, params, 2, "test");
+
   LLVMValueRef test = tobool(cs->builder, ret, "test");
   LLVMBasicBlockRef nextblock = cs->blocks[cs->idx + 2];
   LLVMBasicBlockRef jmpblock = cs->blocks[cs->idx + 1];
   LLVMBuildCondBr(cs->builder, test, nextblock, jmpblock);
+}
+
+static void compile_testset (luaJ_CompileState *cs)
+{
+  updatestack(cs);
+  LLVMValueRef function = runtime_call(cs, luaJ_test);
+  LLVMValueRef rb = gettvaluer(cs, GETARG_B(cs->instr), "rb");
+  LLVMValueRef params[] = {makeint(GETARG_C(cs->instr)), rb};
+  LLVMValueRef ret = LLVMBuildCall(cs->builder, function, params, 2, "test");
+
+  LLVMValueRef test = tobool(cs->builder, ret, "test");
+  LLVMBasicBlockRef setblock = addsubblock(cs, cs->block, cs->block, "set");
+  LLVMBasicBlockRef nextblock = cs->blocks[cs->idx + 2];
+  LLVMBuildCondBr(cs->builder, test, nextblock, setblock);
+
+  LLVMPositionBuilderAtEnd(cs->builder, setblock);
+  LLVMValueRef ra = gettvaluer(cs, GETARG_A(cs->instr), "ra");
+  setregister(cs->builder, ra, rb);
+  LLVMBuildBr(cs->builder, cs->blocks[cs->idx + 1]);
 }
 
 static void compile_return (luaJ_CompileState *cs)
@@ -747,7 +764,7 @@ static void compile_opcode (luaJ_CompileState *cs)
       case OP_LT:       compile_cmp(cs); break;
       case OP_LE:       compile_cmp(cs); break;
       case OP_TEST:     compile_test(cs); break;
-      case OP_TESTSET:  /* TODO */ break;
+      case OP_TESTSET:  compile_testset(cs); break;
       case OP_CALL:     /* TODO */ break;
       case OP_TAILCALL: /* TODO */ break;
       case OP_RETURN:   compile_return(cs); break;

@@ -3,9 +3,9 @@
 -- Author: Gabriel de Quadros Ligneul
 -- Copyright Notice for LLL: see lllvmjit.h
 --
--- test_arith.lua
+-- test_binop.lua
 
-local lll_test = require 'tests/lll_test' 
+local executetests = require 'tests/executetests' 
 
 -- Create all possible combinations of operations and values
 local ops = {'+', '-', '*', '/', '&', '|', '~', '<<', '>>', '%', '//', '^',
@@ -36,5 +36,5 @@ for _, op in ipairs(ops) do
     end
 end
 
-lll_test(functions, {{}})
+executetests(functions, {{}})
 

@@ -5,11 +5,9 @@
 --
 -- test_basic.lua
 
-local lll_test = require 'tests/lll_test' 
+local executetests = require 'tests/executetests' 
 
 -- Create all possible combinations of parameters and returns
--- Uncomment after implementing OP_GETTABUP
---local params = {'', 'a', 'a, b', 'a, b, c'}
 local params = {'a, b, c'}
 local rets = {'', 'nil', '10', '12.3', '"abc"', '"abc", 123', 
         'nil, 123', 'a', 'b', 'c', 'c, b', '123, c'}
@@ -37,5 +35,5 @@ local args = {
     {'abc', function() end},
 }
 
-lll_test(functions, args)
+executetests(functions, args)
 

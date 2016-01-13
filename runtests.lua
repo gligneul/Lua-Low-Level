@@ -16,15 +16,15 @@ local modules = {
     'basic',
     'binop',
     'unop',
-    'test',
+    'optest',
     --'loadkx'
 }
 
 -- Execute the tests
 for _, m in pairs(modules) do
     local file = TEST_PREFIX .. m .. TEST_SUFFIX
-    print('testing: ' .. file .. '...')
+    print('testing: ' .. file .. '... ')
     dofile(file)
-    print('         passed!')
+    print('        passed!')
 end
 
