@@ -63,6 +63,7 @@ typedef struct luaJ_Jit
     LLVMTypeRef luaJ_test;
     LLVMTypeRef luaJ_checkcg;
     LLVMTypeRef luaV_gettable;
+    LLVMTypeRef luaV_settable;
     LLVMTypeRef luaV_objlen;
     LLVMTypeRef luaV_concat;
     LLVMTypeRef luaV_equalobj;
@@ -105,6 +106,7 @@ typedef struct luaJ_CompileState
     LLVMValueRef luaJ_test;
     LLVMValueRef luaJ_checkcg;
     LLVMValueRef luaV_gettable;
+    LLVMValueRef luaV_settable;
     LLVMValueRef luaV_objlen;
     LLVMValueRef luaV_concat;
     LLVMValueRef luaV_equalobj;
@@ -211,6 +213,16 @@ static void settop (luaJ_CompileState *cs, int offset)
   LLVMValueRef top =
         getfieldptr(cs, cs->state, cs->Jit->value_type, lua_State, top);
   LLVMBuildStore(cs->builder, value, top);
+}
+
+/* Obtains the $nth upvalue */
+static LLVMValueRef getupval (luaJ_CompileState *cs, int n)
+{
+  LLVMValueRef upvals = loadfield(cs, cs->closure, cs->Jit->upval_type,
+      LClosure, upvals);
+  LLVMValueRef idx[] = {makeint(n)};
+  LLVMValueRef upval = LLVMBuildGEP(cs->builder, upvals, idx, 1, "upval");
+  return loadfield(cs, upval, cs->Jit->value_type, UpVal, v);
 }
 
 
@@ -457,6 +469,7 @@ static void runtime_loadtypes (luaJ_Jit *Jit)
   rt_loadtype(luaJ_test, makeint_t(), makeint_t(), tvalue);
   rt_loadtype(luaJ_checkcg, LLVMVoidType(), lstate, ci, tvalue);
   rt_loadtype(luaV_gettable, LLVMVoidType(), lstate, tvalue, tvalue, tvalue);
+  rt_loadtype(luaV_settable, LLVMVoidType(), lstate, tvalue, tvalue, tvalue);
   rt_loadunop(luaV_objlen);
   rt_loadtype(luaV_concat, LLVMVoidType(), lstate, makeint_t());
   rt_loadtype(luaV_equalobj, makeint_t(), lstate, tvalue, tvalue);
@@ -487,6 +500,7 @@ static void runtime_init (luaJ_CompileState *cs)
   rt_init(luaJ_test);
   rt_init(luaJ_checkcg);
   rt_init(luaV_gettable);
+  rt_init(luaV_settable);
   rt_init(luaV_objlen);
   rt_init(luaV_concat);
   rt_init(luaV_equalobj);
@@ -518,6 +532,7 @@ static void runtime_link (luaJ_CompileState *cs)
   rt_link(luaJ_test);
   rt_link(luaJ_checkcg);
   rt_link(luaV_gettable);
+  rt_link(luaV_settable);
   rt_link(luaV_objlen);
   rt_link(luaV_concat);
   rt_link(luaV_equalobj);
@@ -635,18 +650,25 @@ static void compile_loadnil (luaJ_CompileState *cs)
 static void compile_gettabup (luaJ_CompileState *cs)
 {
   updatestack(cs);
-  LLVMValueRef upvals = loadfield(cs, cs->closure, cs->Jit->upval_type,
-      LClosure, upvals);
-  LLVMValueRef upvalidx[] = {makeint(GETARG_B(cs->instr))};
-  LLVMValueRef upval = LLVMBuildGEP(cs->builder, upvals, upvalidx, 1, "upval");
-  LLVMValueRef table = loadfield(cs, upval, cs->Jit->value_type, UpVal, v);
   LLVMValueRef params[] = {
       cs->state,
-      table,
+      getupval(cs, GETARG_B(cs->instr)),
       gettvaluerk(cs, GETARG_C(cs->instr), "rkc"),
       gettvaluer(cs, GETARG_A(cs->instr), "ra")
   };
   LLVMBuildCall(cs->builder, runtime_call(cs, luaV_gettable), params, 4, "");
+}
+
+static void compile_settabup (luaJ_CompileState *cs)
+{
+  updatestack(cs);
+  LLVMValueRef params[] = {
+    cs->state,
+    getupval(cs, GETARG_A(cs->instr)),
+    gettvaluerk(cs, GETARG_B(cs->instr), "rkb"),
+    gettvaluerk(cs, GETARG_C(cs->instr), "rkc")
+  };
+  LLVMBuildCall(cs->builder, runtime_call(cs, luaV_settable), params, 4, "");
 }
 
 static void compile_binop (luaJ_CompileState *cs, LLVMValueRef op)
@@ -784,7 +806,7 @@ static void compile_opcode (luaJ_CompileState *cs)
       case OP_GETUPVAL: /* TODO */ break;
       case OP_GETTABUP: compile_gettabup(cs); break;
       case OP_GETTABLE: /* TODO */ break;
-      case OP_SETTABUP: /* TODO */ break;
+      case OP_SETTABUP: compile_settabup(cs); break;
       case OP_SETUPVAL: /* TODO */ break;
       case OP_SETTABLE: /* TODO */ break;
       case OP_NEWTABLE: /* TODO */ break;

@@ -15,9 +15,9 @@ local TEST_SUFFIX = '.lua'
 local modules = {
     'basic',
     'binop',
-    'unop',
     'optest',
-    --'loadkx'
+    'tabup',
+    'unop',
 }
 
 -- Execute the tests
