@@ -861,17 +861,23 @@ static void compile_call (luaJ_CompileState *cs)
 
 static void compile_return (luaJ_CompileState *cs)
 {
+  updatestack(cs);
+  int a = GETARG_A(cs->instr);
   int b = GETARG_B(cs->instr);
-  int nresults;
-  if (b == 1) {
-    nresults = 0;
+  LLVMValueRef nresults;
+  if (b == 0) {
+    LLVMValueRef ra = gettvaluer(cs, a, "ra");
+    LLVMValueRef top = loadfield(cs, cs->state, cs->Jit->value_type, lua_State,
+        top);
+    nresults = LLVMBuildIntCast(cs->builder,
+        LLVMBuildPtrDiff(cs->builder, top, ra, ""), makeint_t(), "nresults");
+  } else if (b == 1) {
+    nresults = makeint(0);
   } else {
-    nresults = b - 1;
-    int a = GETARG_A(cs->instr);
-    updatestack(cs);
-    settop(cs, a + nresults);
+    nresults = makeint(b - 1);
+    settop(cs, a + b - 1);
   }
-  LLVMBuildRet(cs->builder, makeint(nresults));
+  LLVMBuildRet(cs->builder, nresults);
 }
 
 static void compile_opcode (luaJ_CompileState *cs)
@@ -914,7 +920,7 @@ static void compile_opcode (luaJ_CompileState *cs)
       case OP_TEST:     compile_test(cs); break;
       case OP_TESTSET:  compile_testset(cs); break;
       case OP_CALL:     compile_call(cs); break;
-      case OP_TAILCALL: /* TODO */ break;
+      case OP_TAILCALL: compile_call(cs); break;
       case OP_RETURN:   compile_return(cs); break;
       case OP_FORLOOP:  /* TODO */ break;
       case OP_FORPREP:  /* TODO */ break;
