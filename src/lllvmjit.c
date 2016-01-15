@@ -16,6 +16,7 @@
 #include "lopcodes.h"
 #include "luaconf.h"
 #include "lvm.h"
+#include "ltable.h"
 
 #include <llvm-c/Analysis.h>
 #include <llvm-c/Core.h>
@@ -40,10 +41,11 @@ typedef struct luaJ_Jit
   LLVMExecutionEngineRef engine;    /* Execution engine for LLVM */
   LLVMModuleRef module;             /* Global module with aux functions */
   LLVMTypeRef state_type;
-  LLVMTypeRef closure_type;
-  LLVMTypeRef upval_type;
   LLVMTypeRef ci_type;
   LLVMTypeRef value_type;
+  LLVMTypeRef closure_type;
+  LLVMTypeRef upval_type;
+  LLVMTypeRef table_type;
   struct {                          /* runtime functions types */
     LLVMTypeRef luaJ_addrr;
     LLVMTypeRef luaJ_subrr;
@@ -62,6 +64,8 @@ typedef struct luaJ_Jit
     LLVMTypeRef luaJ_not;
     LLVMTypeRef luaJ_test;
     LLVMTypeRef luaJ_checkcg;
+    LLVMTypeRef luaJ_newtable;
+    LLVMTypeRef luaH_resize;
     LLVMTypeRef luaV_gettable;
     LLVMTypeRef luaV_settable;
     LLVMTypeRef luaV_objlen;
@@ -106,6 +110,8 @@ typedef struct luaJ_CompileState
     LLVMValueRef luaJ_not;
     LLVMValueRef luaJ_test;
     LLVMValueRef luaJ_checkcg;
+    LLVMValueRef luaJ_newtable;
+    LLVMValueRef luaH_resize;
     LLVMValueRef luaV_gettable;
     LLVMValueRef luaV_settable;
     LLVMValueRef luaV_objlen;
@@ -434,6 +440,13 @@ static void luaJ_checkcg (lua_State *L, CallInfo *ci, TValue *c)
   luai_threadyield(L);
 }
 
+static Table *luaJ_newtable (lua_State *L, TValue *r)
+{
+  Table *t = luaH_new(L);
+  sethvalue(L, r, t);
+  return t;
+}
+
 static void runtime_loadtypes (luaJ_Jit *Jit)
 {
   #define rt_loadtype(function, ret, ...) \
@@ -452,6 +465,7 @@ static void runtime_loadtypes (luaJ_Jit *Jit)
   LLVMTypeRef lstate = Jit->state_type;
   LLVMTypeRef tvalue = Jit->value_type;
   LLVMTypeRef ci = Jit->ci_type;
+  LLVMTypeRef table = Jit->table_type;
   LLVMTypeRef voidt = LLVMVoidType();
 
   rt_loadbinop(luaJ_addrr);
@@ -471,6 +485,8 @@ static void runtime_loadtypes (luaJ_Jit *Jit)
   rt_loadunop(luaJ_not);
   rt_loadtype(luaJ_test, makeint_t(), makeint_t(), tvalue);
   rt_loadtype(luaJ_checkcg, voidt, lstate, ci, tvalue);
+  rt_loadtype(luaJ_newtable, table, lstate, tvalue);
+  rt_loadtype(luaH_resize, voidt, lstate, table, makeint_t(), makeint_t());
   rt_loadtype(luaV_gettable, voidt, lstate, tvalue, tvalue, tvalue);
   rt_loadtype(luaV_settable, voidt, lstate, tvalue, tvalue, tvalue);
   rt_loadunop(luaV_objlen);
@@ -503,6 +519,8 @@ static void runtime_init (luaJ_CompileState *cs)
   rt_init(luaJ_not);
   rt_init(luaJ_test);
   rt_init(luaJ_checkcg);
+  rt_init(luaJ_newtable);
+  rt_init(luaH_resize);
   rt_init(luaV_gettable);
   rt_init(luaV_settable);
   rt_init(luaV_objlen);
@@ -536,6 +554,8 @@ static void runtime_link (luaJ_CompileState *cs)
   rt_link(luaJ_not);
   rt_link(luaJ_test);
   rt_link(luaJ_checkcg);
+  rt_link(luaJ_newtable);
+  rt_link(luaH_resize);
   rt_link(luaV_gettable);
   rt_link(luaV_settable);
   rt_link(luaV_objlen);
@@ -677,7 +697,26 @@ static void compile_settabup (luaJ_CompileState *cs)
   LLVMBuildCall(cs->builder, runtime_call(cs, luaV_settable), params, 4, "");
 }
 
-static void compile_binop (luaJ_CompileState *cs, LLVMValueRef op)
+static void compile_newtable (luaJ_CompileState *cs)
+{
+  updatestack(cs);
+  int a = GETARG_A(cs->instr);
+  LLVMValueRef params[] = {cs->state, gettvaluer(cs, a, "ra")};
+  LLVMValueRef table = LLVMBuildCall(cs->builder,
+    runtime_call(cs, luaJ_newtable), params, 2, "table");
+  int b = GETARG_B(cs->instr);
+  int c = GETARG_C(cs->instr);
+  if (b != 0 || c != 0) {
+    LLVMValueRef resize_params[] = {cs->state, table, makeint(b), makeint(c)};
+    LLVMBuildCall(cs->builder, runtime_call(cs, luaH_resize),
+        resize_params, 4, "");
+  }
+  compile_checkcg(cs, gettvaluer(cs, a + 1, "next"));
+}
+
+#define compile_binop(cs, op) compile_binopimpl(cs, runtime_call(cs, op))
+
+static void compile_binopimpl (luaJ_CompileState *cs, LLVMValueRef op)
 {
   updatestack(cs);
   LLVMValueRef args[] = {
@@ -689,7 +728,9 @@ static void compile_binop (luaJ_CompileState *cs, LLVMValueRef op)
   LLVMBuildCall(cs->builder, op, args, 4, "");
 }
 
-static void compile_unop (luaJ_CompileState *cs, LLVMValueRef op)
+#define compile_unop(cs, op) compile_unopimpl(cs, runtime_call(cs, op))
+
+static void compile_unopimpl (luaJ_CompileState *cs, LLVMValueRef op)
 {
   updatestack(cs);
   LLVMValueRef args[] = {
@@ -729,7 +770,9 @@ static void compile_jmp (luaJ_CompileState *cs)
   LLVMBuildBr(cs->builder, cs->blocks[cs->idx + GETARG_sBx(cs->instr) + 1]);
 }
 
-static void compile_cmp (luaJ_CompileState *cs)
+#define compile_cmp(cs, op) compile_cmpimpl(cs, runtime_call(cs, op))
+
+static void compile_cmpimpl (luaJ_CompileState *cs, LLVMValueRef op)
 {
   updatestack(cs);
   LLVMValueRef args[] = {
@@ -737,15 +780,7 @@ static void compile_cmp (luaJ_CompileState *cs)
       gettvaluerk(cs, GETARG_B(cs->instr), "rkb"),
       gettvaluerk(cs, GETARG_C(cs->instr), "rkc")
   };
-
-  LLVMValueRef function = NULL;
-  switch (GET_OPCODE(cs->instr)) {
-    case OP_EQ: function = runtime_call(cs, luaV_equalobj); break;
-    case OP_LT: function = runtime_call(cs, luaV_lessthan); break;
-    case OP_LE: function = runtime_call(cs, luaV_lessequal); break;
-    default:    lua_assert(false);
-  }
-  LLVMValueRef result = LLVMBuildCall(cs->builder, function, args, 3, "");
+  LLVMValueRef result = LLVMBuildCall(cs->builder, op, args, 3, "");
   LLVMValueRef a = makeint(GETARG_A(cs->instr));
   LLVMValueRef cmp = LLVMBuildICmp(cs->builder, LLVMIntNE, result, a, "");
   LLVMBasicBlockRef next_block = cs->blocks[cs->idx + 2];
@@ -831,29 +866,29 @@ static void compile_opcode (luaJ_CompileState *cs)
       case OP_SETTABUP: compile_settabup(cs); break;
       case OP_SETUPVAL: /* TODO */ break;
       case OP_SETTABLE: /* TODO */ break;
-      case OP_NEWTABLE: /* TODO */ break;
+      case OP_NEWTABLE: compile_newtable(cs); break;
       case OP_SELF:     /* TODO */ break;
-      case OP_ADD:      compile_binop(cs, runtime_call(cs, luaJ_addrr)); break;
-      case OP_SUB:      compile_binop(cs, runtime_call(cs, luaJ_subrr)); break;
-      case OP_MUL:      compile_binop(cs, runtime_call(cs, luaJ_mulrr)); break;
-      case OP_MOD:      compile_binop(cs, runtime_call(cs, luaJ_modrr)); break;
-      case OP_POW:      compile_binop(cs, runtime_call(cs, luaJ_powrr)); break;
-      case OP_DIV:      compile_binop(cs, runtime_call(cs, luaJ_divrr)); break;
-      case OP_IDIV:     compile_binop(cs, runtime_call(cs, luaJ_idivrr)); break;
-      case OP_BAND:     compile_binop(cs, runtime_call(cs, luaJ_bandrr)); break;
-      case OP_BOR:      compile_binop(cs, runtime_call(cs, luaJ_borrr)); break;
-      case OP_BXOR:     compile_binop(cs, runtime_call(cs, luaJ_bxorrr)); break;
-      case OP_SHL:      compile_binop(cs, runtime_call(cs, luaJ_shlrr)); break;
-      case OP_SHR:      compile_binop(cs, runtime_call(cs, luaJ_shrrr)); break;
-      case OP_UNM:      compile_unop(cs, runtime_call(cs, luaJ_unm)); break;
-      case OP_BNOT:     compile_unop(cs, runtime_call(cs, luaJ_bnot)); break;
-      case OP_NOT:      compile_unop(cs, runtime_call(cs, luaJ_not)); break;
-      case OP_LEN:      compile_unop(cs, runtime_call(cs, luaV_objlen)); break;
+      case OP_ADD:      compile_binop(cs, luaJ_addrr); break;
+      case OP_SUB:      compile_binop(cs, luaJ_subrr); break;
+      case OP_MUL:      compile_binop(cs, luaJ_mulrr); break;
+      case OP_MOD:      compile_binop(cs, luaJ_modrr); break;
+      case OP_POW:      compile_binop(cs, luaJ_powrr); break;
+      case OP_DIV:      compile_binop(cs, luaJ_divrr); break;
+      case OP_IDIV:     compile_binop(cs, luaJ_idivrr); break;
+      case OP_BAND:     compile_binop(cs, luaJ_bandrr); break;
+      case OP_BOR:      compile_binop(cs, luaJ_borrr); break;
+      case OP_BXOR:     compile_binop(cs, luaJ_bxorrr); break;
+      case OP_SHL:      compile_binop(cs, luaJ_shlrr); break;
+      case OP_SHR:      compile_binop(cs, luaJ_shrrr); break;
+      case OP_UNM:      compile_unop(cs, luaJ_unm); break;
+      case OP_BNOT:     compile_unop(cs, luaJ_bnot); break;
+      case OP_NOT:      compile_unop(cs, luaJ_not); break;
+      case OP_LEN:      compile_unop(cs, luaV_objlen); break;
       case OP_CONCAT:   compile_concat(cs); break;
       case OP_JMP:      compile_jmp(cs); break;
-      case OP_EQ:       compile_cmp(cs); break;
-      case OP_LT:       compile_cmp(cs); break;
-      case OP_LE:       compile_cmp(cs); break;
+      case OP_EQ:       compile_cmp(cs, luaV_equalobj); break;
+      case OP_LT:       compile_cmp(cs, luaV_lessthan); break;
+      case OP_LE:       compile_cmp(cs, luaV_lessequal); break;
       case OP_TEST:     compile_test(cs); break;
       case OP_TESTSET:  compile_testset(cs); break;
       case OP_CALL:     compile_call(cs); break;
@@ -920,10 +955,11 @@ static void initJit (lua_State *L)
     exit(1);
   }
   Jit->state_type = makestruct_t(lua_State);
-  Jit->closure_type = makestruct_t(LClosure);
-  Jit->upval_type = makestruct_t(UpVal);
   Jit->ci_type = makestruct_t(CallInfo);
   Jit->value_type = makestruct_t(TValue);
+  Jit->closure_type = makestruct_t(LClosure);
+  Jit->upval_type = makestruct_t(UpVal);
+  Jit->table_type = makestruct_t(Table);
   runtime_loadtypes(Jit);
 }
 

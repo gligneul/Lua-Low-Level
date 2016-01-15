@@ -17,6 +17,7 @@ local modules = {
     'binop',
     'optest',
     'tabup',
+    'table',
     'unop',
 }
 
