@@ -69,6 +69,7 @@ typedef struct luaJ_Jit
     LLVMTypeRef luaV_equalobj;
     LLVMTypeRef luaV_lessthan;
     LLVMTypeRef luaV_lessequal;
+    LLVMTypeRef luaD_call;
   } rttypes;
 } luaJ_Jit;
 static luaJ_Jit *Jit = NULL;
@@ -112,6 +113,7 @@ typedef struct luaJ_CompileState
     LLVMValueRef luaV_equalobj;
     LLVMValueRef luaV_lessthan;
     LLVMValueRef luaV_lessequal;
+    LLVMValueRef luaD_call;
   } rt;
 } luaJ_CompileState;
 
@@ -450,6 +452,7 @@ static void runtime_loadtypes (luaJ_Jit *Jit)
   LLVMTypeRef lstate = Jit->state_type;
   LLVMTypeRef tvalue = Jit->value_type;
   LLVMTypeRef ci = Jit->ci_type;
+  LLVMTypeRef voidt = LLVMVoidType();
 
   rt_loadbinop(luaJ_addrr);
   rt_loadbinop(luaJ_subrr);
@@ -467,14 +470,15 @@ static void runtime_loadtypes (luaJ_Jit *Jit)
   rt_loadunop(luaJ_bnot);
   rt_loadunop(luaJ_not);
   rt_loadtype(luaJ_test, makeint_t(), makeint_t(), tvalue);
-  rt_loadtype(luaJ_checkcg, LLVMVoidType(), lstate, ci, tvalue);
-  rt_loadtype(luaV_gettable, LLVMVoidType(), lstate, tvalue, tvalue, tvalue);
-  rt_loadtype(luaV_settable, LLVMVoidType(), lstate, tvalue, tvalue, tvalue);
+  rt_loadtype(luaJ_checkcg, voidt, lstate, ci, tvalue);
+  rt_loadtype(luaV_gettable, voidt, lstate, tvalue, tvalue, tvalue);
+  rt_loadtype(luaV_settable, voidt, lstate, tvalue, tvalue, tvalue);
   rt_loadunop(luaV_objlen);
-  rt_loadtype(luaV_concat, LLVMVoidType(), lstate, makeint_t());
+  rt_loadtype(luaV_concat, voidt, lstate, makeint_t());
   rt_loadtype(luaV_equalobj, makeint_t(), lstate, tvalue, tvalue);
   rt_loadtype(luaV_lessthan, makeint_t(), lstate, tvalue, tvalue);
   rt_loadtype(luaV_lessequal, makeint_t(), lstate, tvalue, tvalue);
+  rt_loadtype(luaD_call, voidt, lstate, tvalue, makeint_t(), makeint_t());
 }
 
 static void runtime_init (luaJ_CompileState *cs)
@@ -506,6 +510,7 @@ static void runtime_init (luaJ_CompileState *cs)
   rt_init(luaV_equalobj);
   rt_init(luaV_lessthan);
   rt_init(luaV_lessequal);
+  rt_init(luaD_call);
 }
 
 static void runtime_link (luaJ_CompileState *cs)
@@ -538,6 +543,7 @@ static void runtime_link (luaJ_CompileState *cs)
   rt_link(luaV_equalobj);
   rt_link(luaV_lessthan);
   rt_link(luaV_lessequal);
+  rt_link(luaD_call);
 }
 
 #define runtime_call(cs, function) \
@@ -780,6 +786,22 @@ static void compile_testset (luaJ_CompileState *cs)
   LLVMBuildBr(cs->builder, cs->blocks[cs->idx + 1]);
 }
 
+static void compile_call (luaJ_CompileState *cs)
+{
+  int a = GETARG_A(cs->instr);
+  int b = GETARG_B(cs->instr);
+  if (b != 0)
+    settop(cs, a + b);
+  updatestack(cs);
+  LLVMValueRef params[] = {
+    cs->state,
+    gettvaluer(cs, a, "ra"),
+    makeint(GETARG_C(cs->instr) - 1),
+    makeint(0)
+  };
+  LLVMBuildCall(cs->builder, runtime_call(cs, luaD_call), params, 4, "");
+}
+
 static void compile_return (luaJ_CompileState *cs)
 {
   int b = GETARG_B(cs->instr);
@@ -834,7 +856,7 @@ static void compile_opcode (luaJ_CompileState *cs)
       case OP_LE:       compile_cmp(cs); break;
       case OP_TEST:     compile_test(cs); break;
       case OP_TESTSET:  compile_testset(cs); break;
-      case OP_CALL:     /* TODO */ break;
+      case OP_CALL:     compile_call(cs); break;
       case OP_TAILCALL: /* TODO */ break;
       case OP_RETURN:   compile_return(cs); break;
       case OP_FORLOOP:  /* TODO */ break;
