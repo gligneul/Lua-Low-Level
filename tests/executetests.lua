@@ -6,24 +6,12 @@
 -- executetests.lua
 -- Barebone for creating tests for LLL
 
---- Compares two Lua values
-local function cmp(v1, v2)
-    if type(v1) ~= type(v2) then
-        return false
-    end
-    if type(v1) == 'number' then
-        -- nan case:
-        if v1 ~= v1 and v2 ~= v2 then
-            return true
-        end
-    end
-    return v1 == v2
-end
+local compare = require 'tests/compare'
 
 --- Verifies if results are the same
 local function verity_result(ok_lua, r_lua, ok_lll, r_lll)
     if ok_lua or ok_lll then
-        return ok_lua == ok_lll and cmp(r_lua, r_lll)
+        return ok_lua == ok_lll and compare(r_lua, r_lll)
     else
         return true
         -- TODO: fix error messages

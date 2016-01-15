@@ -449,12 +449,10 @@ static Table *luaJ_newtable (lua_State *L, TValue *r)
 
 static void runtime_loadtypes (luaJ_Jit *Jit)
 {
-  #define rt_loadtype(function, ret, ...) \
-    do { \
-      LLVMTypeRef params[] = {__VA_ARGS__}; \
-      int nparams = sizeof(params) / sizeof(LLVMTypeRef); \
-      Jit->rttypes.function = LLVMFunctionType(ret, params, nparams, 0); \
-    } while (0)
+  #define rt_loadtype(function, ret, ...) { \
+    LLVMTypeRef params[] = {__VA_ARGS__}; \
+    int nparams = sizeof(params) / sizeof(LLVMTypeRef); \
+    Jit->rttypes.function = LLVMFunctionType(ret, params, nparams, 0); }
 
   #define rt_loadbinop(function) \
     rt_loadtype(function, LLVMVoidType(), lstate, tvalue, tvalue, tvalue)
@@ -685,6 +683,18 @@ static void compile_gettabup (luaJ_CompileState *cs)
   LLVMBuildCall(cs->builder, runtime_call(cs, luaV_gettable), params, 4, "");
 }
 
+static void compile_gettable (luaJ_CompileState *cs)
+{
+  updatestack(cs);
+  LLVMValueRef params[] = {
+    cs->state,
+    gettvaluer(cs, GETARG_B(cs->instr), "rb"),
+    gettvaluerk(cs, GETARG_C(cs->instr), "rkc"),
+    gettvaluer(cs, GETARG_A(cs->instr), "ra")
+  };
+  LLVMBuildCall(cs->builder, runtime_call(cs, luaV_gettable), params, 4, "");
+}
+
 static void compile_settabup (luaJ_CompileState *cs)
 {
   updatestack(cs);
@@ -693,6 +703,18 @@ static void compile_settabup (luaJ_CompileState *cs)
     getupval(cs, GETARG_A(cs->instr)),
     gettvaluerk(cs, GETARG_B(cs->instr), "rkb"),
     gettvaluerk(cs, GETARG_C(cs->instr), "rkc")
+  };
+  LLVMBuildCall(cs->builder, runtime_call(cs, luaV_settable), params, 4, "");
+}
+
+static void compile_settable (luaJ_CompileState *cs)
+{
+  updatestack(cs);
+  LLVMValueRef params[] = {
+    cs->state,
+    gettvaluer(cs, GETARG_A(cs->instr), "ra"),
+    gettvaluerk(cs, GETARG_B(cs->instr), "rkb"),
+    gettvaluerk(cs, GETARG_C(cs->instr), "rkc"),
   };
   LLVMBuildCall(cs->builder, runtime_call(cs, luaV_settable), params, 4, "");
 }
@@ -862,10 +884,10 @@ static void compile_opcode (luaJ_CompileState *cs)
       case OP_LOADNIL:  compile_loadnil(cs); break;
       case OP_GETUPVAL: /* TODO */ break;
       case OP_GETTABUP: compile_gettabup(cs); break;
-      case OP_GETTABLE: /* TODO */ break;
+      case OP_GETTABLE: compile_gettable(cs); break;
       case OP_SETTABUP: compile_settabup(cs); break;
       case OP_SETUPVAL: /* TODO */ break;
-      case OP_SETTABLE: /* TODO */ break;
+      case OP_SETTABLE: compile_settable(cs); break;
       case OP_NEWTABLE: compile_newtable(cs); break;
       case OP_SELF:     /* TODO */ break;
       case OP_ADD:      compile_binop(cs, luaJ_addrr); break;
