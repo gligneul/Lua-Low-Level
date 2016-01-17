@@ -20,6 +20,7 @@
 
 #include <llvm-c/Analysis.h>
 #include <llvm-c/Core.h>
+#include <llvm-c/BitWriter.h>
 #include <llvm-c/ExecutionEngine.h>
 
 #include <stdio.h>
@@ -29,8 +30,12 @@
 
 /* Type definitions */
 
+typedef int (*LLLFunction) (lua_State *, LClosure *);
+
 struct luaJ_Function
 {
+  LLVMExecutionEngineRef engine;    /* Execution engine for LLVM */
+  LLLFunction func;
   LLVMModuleRef module;             /* Every function have it's own module. */
   LLVMValueRef value;               /* Pointer to the function */
   LClosure *closure;                /* Lua closure */
@@ -38,8 +43,6 @@ struct luaJ_Function
 
 typedef struct luaJ_Jit
 {
-  LLVMExecutionEngineRef engine;    /* Execution engine for LLVM */
-  LLVMModuleRef module;             /* Global module with aux functions */
   LLVMTypeRef state_type;
   LLVMTypeRef ci_type;
   LLVMTypeRef value_type;
@@ -533,7 +536,7 @@ static void runtime_link (luaJ_CompileState *cs)
 {
   #define rt_link(function) \
     if (cs->rt.function) \
-      LLVMAddGlobalMapping(cs->Jit->engine, cs->rt.function, function)
+      LLVMAddGlobalMapping(cs->f->engine, cs->rt.function, function)
 
   rt_link(luaJ_addrr);
   rt_link(luaJ_subrr);
@@ -956,13 +959,23 @@ static void compile (luaJ_Jit *Jit, luaJ_Function *f)
     fprintf(stderr, "\n>>>>> MODULE\n");
     LLVMDumpModule(f->module);
     fprintf(stderr, "\n>>>>> ERROR\n%s\n", error);
-    LLVMDisposeMessage(error);
     exit(1);
   }
+  LLVMDisposeMessage(error);
+  error = NULL;
+  if (LLVMCreateJITCompilerForModule(&f->engine, f->module, LUAJ_LLVMOPT,
+      &error)) {
+    fputs(error, stderr);
+    exit(1);
+  }
+  LLVMDisposeMessage(error);
 
-  LLVMAddModule(Jit->engine, f->module);
   runtime_link(&cs);
   closecs(&cs);
+
+  f->func = (LLLFunction)LLVMGetPointerToGlobal(f->engine, f->value);
+
+//  LLVMWriteBitcodeToFile(f->module, "lll.bc");
 }
 
 
@@ -972,16 +985,10 @@ static void compile (luaJ_Jit *Jit, luaJ_Function *f)
 static void initJit (lua_State *L)
 {
   Jit = luaM_new(L, luaJ_Jit);
-  Jit->module = LLVMModuleCreateWithName("main");
+
   LLVMLinkInJIT();
   LLVMInitializeNativeTarget();
-  char *error = NULL;
-  if (LLVMCreateJITCompilerForModule(&Jit->engine, Jit->module, LUAJ_LLVMOPT,
-      &error)) {
-    // TODO better error treatment
-    fputs(error, stderr);
-    exit(1);
-  }
+
   Jit->state_type = makestruct_t(lua_State);
   Jit->ci_type = makestruct_t(CallInfo);
   Jit->value_type = makestruct_t(TValue);
@@ -1035,12 +1042,7 @@ LUAI_FUNC luaJ_Function *luaJ_compile (lua_State *L, StkId closure)
 LUAI_FUNC int luaJ_call (lua_State *L, luaJ_Function *f)
 {
   precall(L, f);
-  LLVMGenericValueRef args[] = {
-      LLVMCreateGenericValueOfPointer(L),
-      LLVMCreateGenericValueOfPointer(f->closure)
-  };
-  LLVMGenericValueRef result = LLVMRunFunction(Jit->engine, f->value, 2, args);
-  return LLVMGenericValueToInt(result, 0);
+  return f->func(L, f->closure);
 }
 
 LUAI_FUNC void luaJ_dump (lua_State *L, luaJ_Function *f)
@@ -1052,9 +1054,7 @@ LUAI_FUNC void luaJ_dump (lua_State *L, luaJ_Function *f)
 LUAI_FUNC void luaJ_freefunction (lua_State *L, luaJ_Function *f)
 {
   if (f) {
-    LLVMModuleRef module;
-    LLVMRemoveModule(Jit->engine, f->module, &module, NULL);
-    LLVMDisposeModule(module);
+    LLVMDisposeExecutionEngine(f->engine);
     luaM_free(L, f);
   }
 }

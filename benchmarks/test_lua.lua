@@ -6,13 +6,11 @@
 --
 -- test_lua.lua
 
-local function hypot(a, b)
-    return math.sqrt(a * a + b * b)
+local function add(a, b)
+    return a + b
 end
 
-for i = 1, 10000 do
-    for j = 1, 10000 do
-        hypot(i, j)
-    end
+for i = 1, 10e6 do
+    add(i, i)
 end
 

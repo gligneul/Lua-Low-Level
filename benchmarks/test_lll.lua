@@ -6,15 +6,13 @@
 --
 -- test_lll.lua
 
-local function _hypot(a, b)
-    return math.sqrt(a * a + b * b)
+local function _add(a, b)
+    return a + b
 end
 
-local hypot = jit.compile(_hypot)
+local add = jit.compile(_add)
 
-for i = 1, 1000 do
-    for j = 1, 100 do
-        hypot(i, j)
-    end
+for i = 1, 10e6 do
+    add(i, i)
 end
 
