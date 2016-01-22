@@ -2,37 +2,7 @@
 ** LLL - Lua Low Level
 ** September, 2015
 ** Author: Gabriel de Quadros Ligneul
-** Copyright Notice for LLL: eof
-**
-** llvmjit.h
-** This is the interface for jit compiling Lua bytecode into LLVM IR
-*/
-
-#ifndef lllvmjit_h
-#define lllvmjit_h
-
-#include "lstate.h"
-#include "lobject.h"
-
-/* Holds all jit data of a function */
-typedef struct luaJ_Function luaJ_Function;
-
-/* Optimization level for LLVM's jit compiler */
-#define LUAJ_LLVMOPT 3
-
-/* Compiles a function */
-LUAI_FUNC luaJ_Function *luaJ_compile (lua_State *L, StkId closure);
-
-/* Executes the LLVM function; Returns the number of results */
-LUAI_FUNC int luaJ_call (lua_State *L, luaJ_Function *f);
-
-/* Dumps the LLMV function (debug) */
-LUAI_FUNC void luaJ_dump (lua_State *L, luaJ_Function *f);
-
-/* Destroys a Func instance */
-LUAI_FUNC void luaJ_freefunction (lua_State *L, luaJ_Function *f);
-
-/*
+** Copyright Notice for LLL:
 ** The MIT License (MIT)
 ** 
 ** Copyright (c) 2015 Gabriel de Quadros Ligneul
@@ -54,7 +24,39 @@ LUAI_FUNC void luaJ_freefunction (lua_State *L, luaJ_Function *f);
 ** LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 ** OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ** SOFTWARE.
+**
+** lllcore.h
+** LLL C interface
 */
+
+#ifndef LLLCORE_H
+#define LLLCORE_H
+
+#include "lstate.h"
+#include "lobject.h"
+
+/* Compiled function type */
+typedef int (*LLLFunction) (lua_State*, LClosure*);
+
+/* Compiled function engine */
+typedef struct LLLEngine {
+    LLLFunction function;
+    LClosure *lclosure;
+    void *data;
+} LLLEngine;
+
+/* Compiles a Lua function and returns the engine
+** If an error occurs, returns NULL and an error message */
+LLLEngine *LLLCompile (lua_State *L, LClosure *lclosure, char **error_message);
+
+/* Destroys an engine */
+void LLLFreeEngine (lua_State *L, LLLEngine *e);
+
+/* Executes the compiled function; Returns the number of results */
+int LLLCall (lua_State *L, LLLEngine *e);
+
+/* Dumps the LLMV function (debug) */
+void LLLDump (LLLEngine *e);
 
 #endif
 

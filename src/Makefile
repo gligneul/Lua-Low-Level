@@ -8,9 +8,14 @@
 PLAT= linux
 
 CC= clang
+CXX= clang++
 LD= clang++
-CFLAGS= -O2 -Wall -Wextra -Werror -Wno-pedantic -DLUA_COMPAT_5_2 \
-        $(SYSCFLAGS) $(MYCFLAGS)
+
+OPT= -O0 -g
+WARNINGS= -Wall -Wextra -Werror -Wno-pedantic
+
+CFLAGS= $(OPT) $(WARNINGS) -DLUA_COMPAT_5_2 $(SYSCFLAGS) $(MYCFLAGS)
+CXXFLAGS= $(OPT) $(WARNINGS) --std=c++11 $(SYSCXXFLAGS) $(MYCXXFLAGS)
 LDFLAGS= $(SYSLDFLAGS) $(MYLDFLAGS)
 LIBS= -lm $(SYSLIBS) $(MYLIBS)
 
@@ -19,14 +24,15 @@ RANLIB= ranlib
 RM= rm -f
 
 SYSCFLAGS=
+SYSCXXFLAGS=
 SYSLDFLAGS=
 SYSLIBS=
 
 MYCFLAGS= `llvm-config --cflags`
-MYLDFLAGS=
-MYLIBS= `llvm-config --cxxflags --ldflags --libs core executionengine jit \
-	interpreter analysis native bitwriter --system-libs`
-MYOBJS=
+MYCXXFLAGS= `llvm-config --cxxflags`
+MYLDFLAGS= `llvm-config --ldflags`
+MYLIBS= `llvm-config --libs all --system-libs`
+MYOBJS= lllcompiler.o lllcore.o lllengine.o llllib.o lllruntime.o
 
 # == END OF USER SETTINGS -- NO NEED TO CHANGE ANYTHING BELOW THIS LINE =======
 
@@ -34,10 +40,10 @@ PLATS= aix bsd c89 freebsd generic linux macosx mingw posix solaris
 
 LUA_A=	liblua.a
 CORE_O=	lapi.o lcode.o lctype.o ldebug.o ldo.o ldump.o lfunc.o lgc.o llex.o \
-	lllvmjit.o lmem.o lobject.o lopcodes.o lparser.o lstate.o lstring.o \
-	ltable.o ltm.o lundump.o lvm.o lzio.o
+	lmem.o lobject.o lopcodes.o lparser.o lstate.o lstring.o ltable.o \
+	ltm.o lundump.o lvm.o lzio.o
 LIB_O=	lauxlib.o lbaselib.o lbitlib.o lcorolib.o ldblib.o liolib.o \
-	ljitlib.o lmathlib.o loslib.o lstrlib.o ltablib.o lutf8lib.o loadlib.o \
+	lmathlib.o loslib.o lstrlib.o ltablib.o lutf8lib.o loadlib.o \
 	linit.o
 BASE_O= $(CORE_O) $(LIB_O) $(MYOBJS)
 
