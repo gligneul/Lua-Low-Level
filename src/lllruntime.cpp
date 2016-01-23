@@ -10,6 +10,7 @@
 #include <llvm/Support/DynamicLibrary.h>
 #include <llvm/IR/DerivedTypes.h>
 #include <llvm/IR/Function.h>
+#include <llvm/IR/Module.h>
 
 extern "C" {
 #include "lprefix.h"
@@ -214,7 +215,7 @@ Runtime* Runtime::Instance() {
     return instance_;
 }
 
-llvm::Type* GetType(const std::string& name) {
+llvm::Type* Runtime::GetType(const std::string& name) {
     return types_[name];
 }
 
@@ -238,13 +239,11 @@ void Runtime::InitTypes() {
     ADDTYPE(Table);
 }
 
-get (Type *Result, ArrayRef< Type * > Params, bool isVarArg)
-
 void Runtime::InitFunctions() {
     #define ADDFUNCTION(function, ret, ...) { \
         std::vector<llvm::Type*> params = {__VA_ARGS__}; \
         auto type = llvm::FunctionType::get(ret, params, false); \
-        AddFunction(#function, type, function); }
+        AddFunction(#function, type, reinterpret_cast<void*>(function)); }
 
     #define LOADBINOP(function) \
         ADDFUNCTION(function, voidt, lstate, tvalue, tvalue, tvalue)
@@ -287,16 +286,19 @@ void Runtime::InitFunctions() {
     ADDFUNCTION(luaV_lessequal, intt, lstate, tvalue, tvalue);
     ADDFUNCTION(luaD_call, voidt, lstate, tvalue, intt, intt);
 }
-create (ArrayRef< Type * > Elements, StringRef Name, bool isPacked=false)
+
 void Runtime::AddType(const std::string& name, size_t size) {
-    std::vector<Type*> elements = {llvm::IntegerType::get(context_, 8 * size)};
+    std::vector<llvm::Type*> elements =
+            {llvm::IntegerType::get(context_, 8 * size)};
     types_[name] = llvm::PointerType::get(
-            llvm::StructType::create(elemets, name), 0);
+            llvm::StructType::create(elements, name), 0);
 }
 
 void Runtime::AddFunction(const std::string& name, llvm::FunctionType* type,
                           void* address) {
     functions_[name] = type;
     llvm::sys::DynamicLibrary::AddSymbol(name, address);
+}
+
 }
 

@@ -34,53 +34,52 @@ static LClosure* getclosure(lua_State *L, int n) {
     return clLvalue(o);
 }
 
-#define getfunction(L, n) *(LLLEngine **)luaL_checkudata(L, n, "lll.Function")
+#define FUNCTION_METATABLE "lll.Function"
+
+#define getfunction(L) *(LLLEngine **)luaL_checkudata(L, 1, FUNCTION_METATABLE)
 
 
 
 /* API functions */
 
-static int compile(lua_State *L) {
-    char *error = NULL;
-    LLLEngine* engine = LLLCompile(L, getclosure(L, 1), &error);
-    if (!engine) {
-        fputs(error, stderr);
-        free(error);
-        luaL_error(L, "Compilation error");
-    }
-    luaL_getmetatable(L, "lll.Function");
+static int lll_compile(lua_State *L) {
+    LLLEngine **e = (LLLEngine **)lua_newuserdata(L, sizeof(LLLEngine *));
+    const char *err = NULL;
+    if (!(*e = LLLCompile(L, getclosure(L, 1), &err)))
+        luaL_error(L, err);
+    luaL_getmetatable(L, FUNCTION_METATABLE);
     lua_setmetatable(L, -2); 
     return 1;
 }
 
-static int call(lua_State *L) {
-    return LLLCall(L, getfunction(L, 1));
+static int lll_call(lua_State *L) {
+    return LLLCall(L, getfunction(L));
 }
 
-static int gc(lua_State *L) {
-    LLLFreeEngine(L, getfunction(L, 1));
+static int lll_gc(lua_State *L) {
+    LLLFreeEngine(L, getfunction(L));
     return 0;
 }
 
-static int dump(lua_State *L) {
-    LLLDump(getfunction(L, 1));
+static int lll_dump(lua_State *L) {
+    LLLDump(getfunction(L));
     return 0;
 }
 
 static const luaL_Reg lib_f[] = {
-    {"compile", compile},
+    {"compile", lll_compile},
     {NULL, NULL}
 };
 
 static const luaL_Reg lib_m[] = {
-    {"__call", call},
-    {"__gc", gc},
-    {"dump", dump},
+    {"__call", lll_call},
+    {"__gc", lll_gc},
+    {"dump", lll_dump},
     {NULL, NULL}
 };
 
 LUAMOD_API int luaopen_lll (lua_State *L) {
-    luaL_newmetatable(L, "lll.Function");
+    luaL_newmetatable(L, FUNCTION_METATABLE);
     lua_pushvalue(L, -1);
     lua_setfield(L, -2, "__index");
     luaL_setfuncs(L, lib_m, 0);

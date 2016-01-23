@@ -14,6 +14,9 @@
 #include "lllengine.h"
 
 extern "C" {
+#include "lprefix.h"
+#include "lapi.h"
+#include "lauxlib.h"
 #include "lmem.h"
 #include "lllcore.h"
 }
@@ -35,12 +38,10 @@ static void precall (lua_State *L, LLLEngine *e) {
         setnilvalue(args + i);
 }
 
-LLLEngine *LLLCompile (lua_State *L, LClosure *lclosure, char **error_message) {
-    lll::Compiler compiler(L, lclosure);
+LLLEngine *LLLCompile (lua_State *L, LClosure *lclosure, const char **error) {
+    lll::Compiler compiler(lclosure);
     if (!compiler.Compile()) {
-        auto& err = compiler.GetErrorMessage();
-        *error_message = luaM_newvector(L, err.size(), char);
-        strcpy(*error_message, err.c_str());
+        *error = lua_pushstring(L, compiler.GetErrorMessage().c_str());
         return NULL;
     }
     auto engine = compiler.GetEngine();

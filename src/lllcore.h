@@ -46,8 +46,8 @@ typedef struct LLLEngine {
 } LLLEngine;
 
 /* Compiles a Lua function and returns the engine
-** If an error occurs, returns NULL and an error message */
-LLLEngine *LLLCompile (lua_State *L, LClosure *lclosure, char **error_message);
+** If an error occurs, returns NULL and a message */
+LLLEngine *LLLCompile (lua_State *L, LClosure *lclosure, const char **error);
 
 /* Destroys an engine */
 void LLLFreeEngine (lua_State *L, LLLEngine *e);
