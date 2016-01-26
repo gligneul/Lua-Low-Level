@@ -46,7 +46,7 @@ static int lll_compile(lua_State *L) {
     LLLEngine **e = (LLLEngine **)lua_newuserdata(L, sizeof(LLLEngine *));
     const char *err = NULL;
     if (!(*e = LLLCompile(L, getclosure(L, 1), &err)))
-        luaL_error(L, err);
+        luaL_error(L, "%s", err);
     luaL_getmetatable(L, FUNCTION_METATABLE);
     lua_setmetatable(L, -2); 
     return 1;

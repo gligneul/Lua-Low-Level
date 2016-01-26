@@ -199,6 +199,10 @@ static Table *lll_newtable (lua_State *L, TValue *r) {
   return t;
 }
 
+static void lll_upvalbarrier (lua_State *L, UpVal *uv) {
+    luaC_upvalbarrier(L, uv);
+}
+
 namespace lll {
 
 Runtime* Runtime::instance_ = nullptr;
@@ -235,14 +239,14 @@ void Runtime::InitTypes() {
     ADDTYPE(CallInfo);
     ADDTYPE(TValue);
     ADDTYPE(LClosure);
+    ADDTYPE(Proto);
     ADDTYPE(UpVal);
     ADDTYPE(Table);
 }
 
 void Runtime::InitFunctions() {
     #define ADDFUNCTION(function, ret, ...) { \
-        std::vector<llvm::Type*> params = {__VA_ARGS__}; \
-        auto type = llvm::FunctionType::get(ret, params, false); \
+        auto type = llvm::FunctionType::get(ret, {__VA_ARGS__}, false); \
         AddFunction(#function, type, reinterpret_cast<void*>(function)); }
 
     #define LOADBINOP(function) \
@@ -255,6 +259,7 @@ void Runtime::InitFunctions() {
     llvm::Type* tvalue = types_["TValue"];
     llvm::Type* ci = types_["CallInfo"];
     llvm::Type* table = types_["Table"];
+    llvm::Type* upval = types_["UpVal"];
     llvm::Type* voidt = llvm::Type::getVoidTy(context_);
     llvm::Type* intt = llvm::IntegerType::get(context_, 8 * sizeof(int));
 
@@ -276,6 +281,7 @@ void Runtime::InitFunctions() {
     ADDFUNCTION(lll_test, intt, intt, tvalue);
     ADDFUNCTION(lll_checkcg, voidt, lstate, ci, tvalue);
     ADDFUNCTION(lll_newtable, table, lstate, tvalue);
+    ADDFUNCTION(lll_upvalbarrier, voidt, lstate, upval);
     ADDFUNCTION(luaH_resize, voidt, lstate, table, intt, intt);
     ADDFUNCTION(luaV_gettable, voidt, lstate, tvalue, tvalue, tvalue);
     ADDFUNCTION(luaV_settable, voidt, lstate, tvalue, tvalue, tvalue);

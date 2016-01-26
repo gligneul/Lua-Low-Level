@@ -9,6 +9,7 @@
 */
 
 #include <cstring>
+#include <iostream>
 
 #include "lllcompiler.h"
 #include "lllengine.h"

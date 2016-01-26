@@ -1,7 +1,7 @@
 -- LLL - Lua Low Level
 -- September, 2015
 -- Author: Gabriel de Quadros Ligneul
--- Copyright Notice for LLL: see lllvmjit.h
+-- Copyright Notice for LLL: see lllcore.h
 --
 -- test_optest.lua
 

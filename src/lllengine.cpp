@@ -16,7 +16,7 @@ namespace lll {
 Engine::Engine(llvm::ExecutionEngine* ee, llvm::Module* module) :
     ee_(ee),
     module_(module),
-    function_(ee->getPointerToNamedFunction("main")) {
+    function_(ee->getPointerToNamedFunction("lll")) {
 }
 
 void* Engine::GetFunction() {

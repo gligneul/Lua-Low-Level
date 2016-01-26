@@ -51,14 +51,8 @@ private:
     // Creates one basic block for each instruction
     void CreateBlocks();
 
-    // Obtains the current instruction
-    Instruction GetInstruction();
-
     // Compiles the Lua proto instructions
     void CompileInstructions();
-
-    // Compiles the specific instruction
-    void CompileReturn();
 
     // Returns true if the module doesn't have any error
     bool VerifyModule();
@@ -66,7 +60,34 @@ private:
     // Creates the engine and returns true if it doesn't have any error
     bool CreateEngine();
 
-    llvm::Value* CreateInt(int value);
+    // Compiles the specific instruction
+    void CompileMove();
+    void CompileLoadk(bool extraarg);
+    void CompileLoadbool();
+    void CompileLoadnil();
+    void CompileGetupval();
+    void CompileGettabup();
+    void CompileGettable();
+    void CompileSettabup();
+    void CompileSetupval();
+    void CompileSettable();
+    void CompileNewtable();
+    void CompileBinop(const std::string& function);
+    void CompileUnop(const std::string& function);
+    void CompileConcat();
+    void CompileJmp();
+    void CompileCmp(const std::string& function);
+    void CompileTest();
+    void CompileTestset();
+    void CompileCall();
+    void CompileReturn();
+    void CompileCheckcg(llvm::Value* reg);
+
+    // Makes a llvm int type
+    llvm::Type* MakeIntT(int nbytes);
+
+    // Makes a llvm int value
+    llvm::Value* MakeInt(int value);
 
     // Obtains the pointer to the field at $offset
     llvm::Value* GetFieldPtr(llvm::Value* strukt, llvm::Type* fieldtype,
@@ -75,6 +96,30 @@ private:
     // Loads the field at $offset
     llvm::Value* LoadField(llvm::Value* strukt, llvm::Type* fieldtype,
             size_t offset, const std::string& name);
+
+    // Sets a field at $offset
+    void SetField(llvm::Value* strukt, llvm::Value* fieldvalue, size_t offset,
+            const std::string& fieldname);
+
+    // Gets a value at $arg
+    llvm::Value* GetValueR(int arg, const std::string& name);
+    llvm::Value* GetValueK(int arg, const std::string& name);
+    llvm::Value* GetValueRK(int arg, const std::string& name);
+
+    // Gets the upvalue $n
+    llvm::Value* GetUpval(int n);
+
+    // Obtains a runtime function
+    llvm::Function* GetFunction(const std::string& name);
+
+    // Sets a register with a value
+    void SetRegister(llvm::Value* reg, llvm::Value* value);
+
+    // Sets the top of the stack
+    void SetTop(int reg);
+
+    // Updates the func variable; should be called before getting a register
+    void UpdateStack();
 
     LClosure* lclosure_;
     std::string error_;
@@ -89,9 +134,11 @@ private:
         llvm::Value* state;
         llvm::Value* closure;
         llvm::Value* ci;
+        llvm::Value* k;
         llvm::Value* func;
     } values_;
     int curr_;
+    Instruction instr_;
 };
 
 }

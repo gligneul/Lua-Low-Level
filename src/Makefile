@@ -167,14 +167,11 @@ lgc.o: lgc.c lprefix.h lua.h luaconf.h ldebug.h lstate.h lobject.h \
   llimits.h ltm.h lzio.h lmem.h ldo.h lfunc.h lgc.h lstring.h ltable.h
 linit.o: linit.c lprefix.h lua.h luaconf.h lualib.h lauxlib.h
 liolib.o: liolib.c lprefix.h lua.h luaconf.h lauxlib.h lualib.h
-ljitlib.o: ljitlib.c lprefix.h lua.h luaconf.h lauxlib.h lstate.h \
-  lobject.h llimits.h ltm.h lzio.h lmem.h lllvmjit.h lualib.h
 llex.o: llex.c lprefix.h lua.h luaconf.h lctype.h llimits.h ldebug.h \
   lstate.h lobject.h ltm.h lzio.h lmem.h ldo.h lgc.h llex.h lparser.h \
   lstring.h ltable.h
-lllvmjit.o: lllvmjit.c lprefix.h lfunc.h lobject.h llimits.h lua.h \
-  luaconf.h lllvmjit.h lstate.h ltm.h lzio.h lmem.h lopcodes.h lvm.h \
-  ldo.h
+llllib.o: llllib.c lllcore.h lstate.h lua.h luaconf.h lobject.h llimits.h \
+  ltm.h lzio.h lmem.h lauxlib.h lprefix.h lualib.h
 lmathlib.o: lmathlib.c lprefix.h lua.h luaconf.h lauxlib.h lualib.h
 lmem.o: lmem.c lprefix.h lua.h luaconf.h ldebug.h lstate.h lobject.h \
   llimits.h ltm.h lzio.h lmem.h ldo.h lgc.h

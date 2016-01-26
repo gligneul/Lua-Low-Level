@@ -1,7 +1,7 @@
 -- LLL - Lua Low Level
 -- September, 2015
 -- Author: Gabriel de Quadros Ligneul
--- Copyright Notice for LLL: see lllvmjit.h
+-- Copyright Notice for LLL: see lllcore.h
 --
 -- executetests.lua
 -- Barebone for creating tests for LLL
@@ -53,7 +53,7 @@ return function(functions, arguments)
             error('can\'t compile chunk: ' .. f_str .. '\nerror: ' .. err)
         end
         local f_lua = f_chunk()
-        local f_lll = jit.compile(f_lua)
+        local f_lll = lll.compile(f_lua)
 
         -- Execute the functions
         for _, a in ipairs(arguments) do
