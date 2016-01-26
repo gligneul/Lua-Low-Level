@@ -29,7 +29,7 @@ SYSLDFLAGS=
 SYSLIBS=
 
 MYCFLAGS= `llvm-config --cflags`
-MYCXXFLAGS= `llvm-config --cxxflags`
+MYCXXFLAGS= `llvm-config --cflags`
 MYLDFLAGS= `llvm-config --ldflags`
 MYLIBS= `llvm-config --libs all --system-libs`
 MYOBJS= lllcompiler.o lllcore.o lllengine.o llllib.o lllruntime.o
