@@ -141,7 +141,7 @@ void Compiler::CompileInstructions() {
             case OP_CALL:     CompileCall(); break;
             case OP_TAILCALL: CompileCall(); break;
             case OP_RETURN:   CompileReturn(); break;
-            case OP_FORLOOP:  /* TODO */ break;
+            case OP_FORLOOP:  CompileForloop(); break;
             case OP_FORPREP:  /* TODO */ break;
             case OP_TFORCALL: /* TODO */ break;
             case OP_TFORLOOP: /* TODO */ break;
@@ -371,20 +371,20 @@ void Compiler::CompileCmp(const std::string& function) {
 void Compiler::CompileTest() {
     UpdateStack();
     auto args = {MakeInt(GETARG_C(instr_)), GetValueR(GETARG_A(instr_), "ra")};
-    auto result = builder_.CreateCall(GetFunction("lll_test"), args, "result");
-    auto test = builder_.CreateICmpNE(result, MakeInt(0), "test");
-    builder_.CreateCondBr(test, blocks_[curr_ + 2], blocks_[curr_ + 1]);
+    auto result = ToBool(builder_.CreateCall(GetFunction("lll_test"), args,
+            "result"));
+    builder_.CreateCondBr(result, blocks_[curr_ + 2], blocks_[curr_ + 1]);
 }
 
 void Compiler::CompileTestset() {
     UpdateStack();
     auto rb = GetValueR(GETARG_B(instr_), "rb");
     auto args = {MakeInt(GETARG_C(instr_)), rb};
-    auto result = builder_.CreateCall(GetFunction("lll_test"), args, "result");
-    auto test = builder_.CreateICmpNE(result, MakeInt(0), "test");
+    auto result = ToBool(builder_.CreateCall(GetFunction("lll_test"), args,
+            "result"));
     auto setblock = llvm::BasicBlock::Create(context_,
             blocks_[curr_]->getName() + ".set", function_, blocks_[curr_]);
-    builder_.CreateCondBr(test, blocks_[curr_ + 2], setblock);
+    builder_.CreateCondBr(result, blocks_[curr_ + 2], setblock);
     builder_.SetInsertPoint(setblock);
     auto ra = GetValueR(GETARG_A(instr_), "ra");
     SetRegister(ra, rb);
@@ -426,6 +426,15 @@ void Compiler::CompileReturn() {
     builder_.CreateRet(nresults);
 }
 
+void Compiler::CompileForloop() {
+    UpdateStack();
+    auto ra = GetValueR(GETARG_A(instr_), "ra");
+    auto jump = ToBool(builder_.CreateCall(GetFunction("lll_forloop"), {ra},
+            "jump"));
+    auto jumpblock = blocks_[curr_ + 1 + GETARG_sBx(instr_)];
+    builder_.CreateCondBr(jump, jumpblock, blocks_[curr_ + 1]);
+}
+
 void Compiler::CompileCheckcg(llvm::Value* reg) {
     auto args = {values_.state, values_.ci, reg};
     builder_.CreateCall(GetFunction("lll_checkcg"), args);
@@ -437,6 +446,10 @@ llvm::Type* Compiler::MakeIntT(int nbytes) {
 
 llvm::Value* Compiler::MakeInt(int value) {
     return llvm::ConstantInt::get(MakeIntT(sizeof(int)), value);
+}
+
+llvm::Value* Compiler::ToBool(llvm::Value* value) {
+    return builder_.CreateICmpNE(value, MakeInt(0), value->getName());
 }
 
 llvm::Value* Compiler::GetFieldPtr(llvm::Value* strukt, llvm::Type* fieldtype,

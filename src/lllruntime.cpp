@@ -205,6 +205,33 @@ static void lll_upvalbarrier (lua_State *L, UpVal *uv) {
     luaC_upvalbarrier(L, uv);
 }
 
+// Returs whether it is to go back
+static int lll_forloop(TValue* ra) {
+    int goback = 0;
+    if (ttisinteger(ra)) {  /* integer loop? */
+        lua_Integer step = ivalue(ra + 2);
+        lua_Integer idx = ivalue(ra) + step; /* increment index */
+        lua_Integer limit = ivalue(ra + 1);
+        if ((0 < step) ? (idx <= limit) : (limit <= idx)) {
+            goback = 1;  /* jump back */
+            chgivalue(ra, idx);  /* update internal index... */
+            setivalue(ra + 3, idx);  /* ...and external index */
+        }
+    }
+    else {  /* floating loop */
+        lua_Number step = fltvalue(ra + 2);
+        lua_Number idx = luai_numadd(L, fltvalue(ra), step); /* inc. index */
+        lua_Number limit = fltvalue(ra + 1);
+        if (luai_numlt(0, step) ? luai_numle(idx, limit)
+                                : luai_numle(limit, idx)) {
+            goback = 1;  /* jump back */
+            chgfltvalue(ra, idx);  /* update internal index... */
+            setfltvalue(ra + 3, idx);  /* ...and external index */
+        }
+    }
+    return goback;
+}
+
 namespace lll {
 
 Runtime* Runtime::instance_ = nullptr;
@@ -288,6 +315,7 @@ void Runtime::InitFunctions() {
     ADDFUNCTION(lll_checkcg, voidt, lstate, ci, tvalue);
     ADDFUNCTION(lll_newtable, table, lstate, tvalue);
     ADDFUNCTION(lll_upvalbarrier, voidt, lstate, upval);
+    ADDFUNCTION(lll_forloop, intt, tvalue);
     ADDFUNCTION(luaH_resize, voidt, lstate, table, intt, intt);
     ADDFUNCTION(luaV_gettable, voidt, lstate, tvalue, tvalue, tvalue);
     ADDFUNCTION(luaV_settable, voidt, lstate, tvalue, tvalue, tvalue);

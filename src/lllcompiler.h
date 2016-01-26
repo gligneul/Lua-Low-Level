@@ -82,6 +82,7 @@ private:
     void CompileTestset();
     void CompileCall();
     void CompileReturn();
+    void CompileForloop();
     void CompileCheckcg(llvm::Value* reg);
 
     // Makes a llvm int type
@@ -89,6 +90,9 @@ private:
 
     // Makes a llvm int value
     llvm::Value* MakeInt(int value);
+
+    // Converts an int to boolean
+    llvm::Value* ToBool(llvm::Value* value);
 
     // Obtains the pointer to the field at $offset
     llvm::Value* GetFieldPtr(llvm::Value* strukt, llvm::Type* fieldtype,
