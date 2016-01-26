@@ -7,6 +7,8 @@
 ** runtime.cpp
 */
 
+#include <cstdio>
+
 #include <llvm/Support/DynamicLibrary.h>
 #include <llvm/IR/DerivedTypes.h>
 #include <llvm/IR/Function.h>
@@ -220,11 +222,15 @@ Runtime* Runtime::Instance() {
 }
 
 llvm::Type* Runtime::GetType(const std::string& name) {
+    assert(types_.find(name) != types_.end() ||
+           (fprintf(stderr, "Not found: %s\n", name.c_str()), 0));
     return types_[name];
 }
 
 llvm::Function* Runtime::GetFunction(llvm::Module* module,
                                      const std::string& name) {
+    assert(functions_.find(name) != functions_.end() ||
+           (fprintf(stderr, "Not found: %s\n", name.c_str()), 0));
     auto function = module->getFunction(name);
     if (!function)
         function = llvm::Function::Create(functions_[name],

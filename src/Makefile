@@ -28,8 +28,8 @@ SYSCXXFLAGS=
 SYSLDFLAGS=
 SYSLIBS=
 
-MYCFLAGS= `llvm-config --cflags`
-MYCXXFLAGS= `llvm-config --cflags`
+MYCFLAGS= `llvm-config --cflags | sed -e 's/-DNDEBUG//'`
+MYCXXFLAGS= $(MYCFLAGS)
 MYLDFLAGS= `llvm-config --ldflags`
 MYLIBS= `llvm-config --libs all --system-libs`
 MYOBJS= lllcompiler.o lllcore.o lllengine.o llllib.o lllruntime.o
@@ -81,6 +81,7 @@ clean:
 
 depend:
 	@$(CC) $(CFLAGS) -MM l*.c
+	@$(CXX) $(CXXFLAGS) -MM l*.cpp
 
 echo:
 	@echo "PLAT= $(PLAT)"
@@ -207,5 +208,15 @@ lvm.o: lvm.c lprefix.h lua.h luaconf.h ldebug.h lstate.h lobject.h \
   ltable.h lvm.h
 lzio.o: lzio.c lprefix.h lua.h luaconf.h llimits.h lmem.h lstate.h \
   lobject.h ltm.h lzio.h
+lllcompiler.o: lllcompiler.cpp lllcompiler.h llimits.h lua.h luaconf.h \
+ lllengine.h lllruntime.h lprefix.h lfunc.h lobject.h lgc.h lstate.h \
+ ltm.h lzio.h lmem.h lopcodes.h lvm.h ldo.h ltable.h
+lllcore.o: lllcore.cpp lllcompiler.h llimits.h lua.h luaconf.h \
+ lllengine.h lprefix.h lapi.h lstate.h lobject.h ltm.h lzio.h lmem.h \
+ lauxlib.h lllcore.h
+lllengine.o: lllengine.cpp lllengine.h
+lllruntime.o: lllruntime.cpp lprefix.h lfunc.h lobject.h llimits.h lua.h \
+ luaconf.h lgc.h lstate.h ltm.h lzio.h lmem.h lopcodes.h lvm.h ldo.h \
+ ltable.h lllruntime.h
 
 # (end of Makefile)

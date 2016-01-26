@@ -46,7 +46,6 @@ end
 ---     List of arguments that will be passed to the functions
 return function(functions, arguments)
     for _, f_str in ipairs(functions) do
-
         -- Create Lua and LLL functions
         local f_chunk, err = load(f_str)
         if not f_chunk then

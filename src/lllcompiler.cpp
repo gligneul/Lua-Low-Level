@@ -357,7 +357,7 @@ void Compiler::CompileCmp(const std::string& function) {
 void Compiler::CompileTest() {
     UpdateStack();
     auto args = {MakeInt(GETARG_C(instr_)), GetValueR(GETARG_A(instr_), "ra")};
-    auto result = builder_.CreateCall(GetFunction("luaJ_test"), args, "result");
+    auto result = builder_.CreateCall(GetFunction("lll_test"), args, "result");
     auto test = builder_.CreateICmpNE(result, MakeInt(0), "test");
     builder_.CreateCondBr(test, blocks_[curr_ + 2], blocks_[curr_ + 1]);
 }
@@ -366,7 +366,7 @@ void Compiler::CompileTestset() {
     UpdateStack();
     auto rb = GetValueR(GETARG_B(instr_), "rb");
     auto args = {MakeInt(GETARG_C(instr_)), rb};
-    auto result = builder_.CreateCall(GetFunction("luaJ_test"), args, "result");
+    auto result = builder_.CreateCall(GetFunction("lll_test"), args, "result");
     auto test = builder_.CreateICmpNE(result, MakeInt(0), "test");
     auto setblock = llvm::BasicBlock::Create(context_,
             blocks_[curr_]->getName() + ".set", function_, blocks_[curr_]);
@@ -413,8 +413,8 @@ void Compiler::CompileReturn() {
 }
 
 void Compiler::CompileCheckcg(llvm::Value* reg) {
-    auto args = {values_.state, reg};
-    builder_.CreateCall(GetFunction("luaJ_checkcg"), args);
+    auto args = {values_.state, values_.ci, reg};
+    builder_.CreateCall(GetFunction("lll_checkcg"), args);
 }
 
 llvm::Type* Compiler::MakeIntT(int nbytes) {
