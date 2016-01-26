@@ -4,7 +4,7 @@
 -- Author: Gabriel de Quadros Ligneul
 -- Copyright Notice for LLL: see lllcore.h
 --
--- test_table.lua
+-- test_upval.lua
 
 local a
 local get = lll.compile(function() return a end)

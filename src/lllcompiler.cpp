@@ -114,7 +114,7 @@ void Compiler::CompileInstructions() {
             case OP_SETUPVAL: CompileSetupval(); break;
             case OP_SETTABLE: CompileSettable(); break;
             case OP_NEWTABLE: CompileNewtable(); break;
-            case OP_SELF:     /* TODO */ break;
+            case OP_SELF:     CompileSelf(); break;
             case OP_ADD:      CompileBinop("lll_addrr"); break;
             case OP_SUB:      CompileBinop("lll_subrr"); break;
             case OP_MUL:      CompileBinop("lll_mulrr"); break;
@@ -290,6 +290,20 @@ void Compiler::CompileNewtable() {
         builder_.CreateCall(GetFunction("luaH_resize"), args);
     }
     CompileCheckcg(GetValueR(a + 1, "next"));
+}
+
+void Compiler::CompileSelf() {
+    UpdateStack();
+    auto rapp = GetValueR(GETARG_A(instr_) + 1, "rapp");
+    auto rb = GetValueR(GETARG_B(instr_), "rb");
+    SetRegister(rapp, rb);
+    auto args = {
+        values_.state,
+        rb,
+        GetValueRK(GETARG_C(instr_), "rkc"),
+        GetValueR(GETARG_A(instr_), "ra")
+    };
+    builder_.CreateCall(GetFunction("luaV_gettable"), args);
 }
 
 void Compiler::CompileBinop(const std::string& function) {

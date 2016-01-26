@@ -16,8 +16,9 @@ local modules = {
     'basic',
     'binop',
     'optest',
-    'tabup',
+    'self',
     'table',
+    'tabup',
     'unop',
     'upval',
 }

@@ -72,6 +72,7 @@ private:
     void CompileSetupval();
     void CompileSettable();
     void CompileNewtable();
+    void CompileSelf();
     void CompileBinop(const std::string& function);
     void CompileUnop(const std::string& function);
     void CompileConcat();
