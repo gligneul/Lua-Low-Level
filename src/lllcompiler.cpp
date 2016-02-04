@@ -380,8 +380,7 @@ void Compiler::CompileTestset() {
     auto args = {MakeInt(GETARG_C(instr_)), rb};
     auto result = ToBool(builder_.CreateCall(GetFunction("lll_test"), args,
             "result"));
-    auto setblock = llvm::BasicBlock::Create(context_,
-            blocks_[curr_]->getName() + ".set", function_, blocks_[curr_]);
+    auto setblock = CreateSubBlock("set");
     builder_.CreateCondBr(result, blocks_[curr_ + 2], setblock);
     builder_.SetInsertPoint(setblock);
     auto ra = GetValueR(GETARG_A(instr_), "ra");
@@ -437,28 +436,37 @@ void Compiler::CompileForprep() {
 }
 
 void Compiler::CompileTforcall() {
-#if 0
-        StkId cb = ra + 3;  /* call base */
-        setobjs2s(L, cb+2, ra+2);
-        setobjs2s(L, cb+1, ra+1);
-        setobjs2s(L, cb, ra);
-        L->top = cb + 3;  /* func. + 2 args (state and index) */
-        Protect(luaD_call(L, cb, GETARG_C(i), 1));
-        L->top = ci->top;
-        i = *(ci->u.l.savedpc++);  /* go to next instruction */
-        ra = RA(i);
-        lua_assert(GET_OPCODE(i) == OP_TFORLOOP);
-#endif
+    UpdateStack();
+    int a = GETARG_A(instr_);
+    int cb = a + 3;
+    SetRegister(GetValueR(cb + 2, "cb2"), GetValueR(a + 2, "ra2"));
+    SetRegister(GetValueR(cb + 1, "cb1"), GetValueR(a + 1, "ra1"));
+    SetRegister(GetValueR(cb, "cb"), GetValueR(a, "ra"));
+    SetTop(cb + 3);
+    auto args = {
+        values_.state,
+        GetValueR(cb, "cb"),
+        MakeInt(GETARG_C(instr_)),
+        MakeInt(0)
+    };
+    builder_.CreateCall(GetFunction("luaD_call"), args);
+    ReloadTop();
 }
 
 void Compiler::CompileTforloop() {
-#if 0
-        l_tforloop:
-        if (!ttisnil(ra + 1)) {  /* continue loop? */
-          setobjs2s(L, ra, ra + 1);  /* save control variable */
-           ci->u.l.savedpc += GETARG_sBx(i);  /* jump back */
-        }
-#endif
+    UpdateStack();
+    int a = GETARG_A(instr_);
+    auto ra1 = GetValueR(a + 1, "ra1");
+    auto tag = LoadField(ra1, MakeIntT(sizeof(int)), offsetof(TValue, tt_),
+            "tag");
+    auto notnil = builder_.CreateICmpNE(tag, MakeInt(LUA_TNIL), "notnil");
+    auto continueblock = CreateSubBlock("continue");
+    builder_.CreateCondBr(notnil, continueblock, blocks_[curr_ + 1]);
+
+    builder_.SetInsertPoint(continueblock);
+    auto ra = GetValueR(a, "ra");
+    SetRegister(ra, ra1);
+    builder_.CreateBr(blocks_[curr_ + 1 + GETARG_sBx(instr_)]);
 }
 
 void Compiler::CompileSetlist() {
@@ -608,6 +616,11 @@ llvm::Value* Compiler::TopDiff(int n) {
 void Compiler::UpdateStack() {
     values_.func = LoadField(values_.ci, rt_->GetType("TValue"),
             offsetof(CallInfo, func), "func");
+}
+
+llvm::BasicBlock* Compiler::CreateSubBlock(const std::string& suffix) {
+    return llvm::BasicBlock::Create(context_,
+            blocks_[curr_]->getName() + suffix, function_, blocks_[curr_]);
 }
 
 }

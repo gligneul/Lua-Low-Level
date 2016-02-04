@@ -138,6 +138,9 @@ private:
     // Updates the func variable; should be called before getting a register
     void UpdateStack();
 
+    // Creates a sub-block with $suffix
+    llvm::BasicBlock* CreateSubBlock(const std::string& suffix);
+
     LClosure* lclosure_;
     std::string error_;
     llvm::LLVMContext& context_;
