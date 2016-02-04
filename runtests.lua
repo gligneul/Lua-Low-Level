@@ -15,6 +15,7 @@ local TEST_SUFFIX = '.lua'
 local modules = {
     'basic',
     'binop',
+    'for',
     'optest',
     'self',
     'table',

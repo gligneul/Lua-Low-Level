@@ -142,12 +142,12 @@ void Compiler::CompileInstructions() {
             case OP_TAILCALL: CompileCall(); break;
             case OP_RETURN:   CompileReturn(); break;
             case OP_FORLOOP:  CompileForloop(); break;
-            case OP_FORPREP:  /* TODO */ break;
-            case OP_TFORCALL: /* TODO */ break;
-            case OP_TFORLOOP: /* TODO */ break;
-            case OP_SETLIST:  /* TODO */ break;
-            case OP_CLOSURE:  /* TODO */ break;
-            case OP_VARARG:   /* TODO */ break;
+            case OP_FORPREP:  CompileForprep(); break;
+            case OP_TFORCALL: CompileTforcall(); break;
+            case OP_TFORLOOP: CompileTforloop(); break;
+            case OP_SETLIST:  CompileSetlist(); break;
+            case OP_CLOSURE:  CompileClosure(); break;
+            case OP_VARARG:   CompileVararg(); break;
             case OP_EXTRAARG: /* ignored */ break;
         }
         if (!blocks_[curr_]->getTerminator())
@@ -346,9 +346,7 @@ void Compiler::CompileConcat() {
     else
         CompileCheckcg(rb);
 
-    auto oldtop = LoadField(values_.ci, rt_->GetType("TValue"),
-            offsetof(CallInfo, top), "oldtop");
-    SetField(values_.state, oldtop, offsetof(lua_State, top), "top");
+    ReloadTop();
 }
 
 void Compiler::CompileJmp() {
@@ -412,11 +410,7 @@ void Compiler::CompileReturn() {
     int b = GETARG_B(instr_);
     llvm::Value* nresults = nullptr;
     if (b == 0) {
-        auto ra = GetValueR(GETARG_A(instr_), "ra");
-        auto top = LoadField(values_.state, rt_->GetType("TValue"),
-                offsetof(lua_State, top), "top");
-        auto diff = builder_.CreatePtrDiff(top, ra, "diff");
-        nresults = builder_.CreateIntCast(diff, MakeIntT(sizeof(int)), false);
+        nresults = TopDiff(GETARG_A(instr_));
     } else if (b == 1) { 
         nresults = MakeInt(0);
     } else {
@@ -433,6 +427,92 @@ void Compiler::CompileForloop() {
             "jump"));
     auto jumpblock = blocks_[curr_ + 1 + GETARG_sBx(instr_)];
     builder_.CreateCondBr(jump, jumpblock, blocks_[curr_ + 1]);
+}
+
+void Compiler::CompileForprep() {
+    UpdateStack();
+    auto args = {values_.state, GetValueR(GETARG_A(instr_), "ra")};
+    builder_.CreateCall(GetFunction("lll_forprep"), args);
+    builder_.CreateBr(blocks_[curr_ + 1 + GETARG_sBx(instr_)]);
+}
+
+void Compiler::CompileTforcall() {
+#if 0
+        StkId cb = ra + 3;  /* call base */
+        setobjs2s(L, cb+2, ra+2);
+        setobjs2s(L, cb+1, ra+1);
+        setobjs2s(L, cb, ra);
+        L->top = cb + 3;  /* func. + 2 args (state and index) */
+        Protect(luaD_call(L, cb, GETARG_C(i), 1));
+        L->top = ci->top;
+        i = *(ci->u.l.savedpc++);  /* go to next instruction */
+        ra = RA(i);
+        lua_assert(GET_OPCODE(i) == OP_TFORLOOP);
+#endif
+}
+
+void Compiler::CompileTforloop() {
+#if 0
+        l_tforloop:
+        if (!ttisnil(ra + 1)) {  /* continue loop? */
+          setobjs2s(L, ra, ra + 1);  /* save control variable */
+           ci->u.l.savedpc += GETARG_sBx(i);  /* jump back */
+        }
+#endif
+}
+
+void Compiler::CompileSetlist() {
+    UpdateStack();
+
+    int a = GETARG_A(instr_);
+    int b = GETARG_B(instr_);
+    int c = GETARG_C(instr_);
+    if (c == 0)
+        c = GETARG_Ax(lclosure_->p->code[curr_ + 1]);
+
+    auto n = (b != 0 ? MakeInt(b) : TopDiff(a - 1));
+    auto fields = MakeInt((c - 1) * LFIELDS_PER_FLUSH);
+
+    auto args = {values_.state, GetValueR(a, "ra"), fields, n};
+    builder_.CreateCall(GetFunction("lll_setlist"), args);
+    ReloadTop();
+}
+
+void Compiler::CompileClosure() {
+#if 0
+        Proto *p = cl->p->p[GETARG_Bx(i)];
+        LClosure *ncl = getcached(p, cl->upvals, base);  /* cached closure */
+        if (ncl == NULL)  /* no match? */
+          pushclosure(L, p, cl->upvals, base, ra);  /* create a new one */
+        else
+          setclLvalue(L, ra, ncl);  /* push cashed closure */
+        checkGC(L, ra + 1);
+        vmbreak;
+#endif
+}
+
+void Compiler::CompileVararg() {
+#if 0
+        int b = GETARG_B(instr_) - 1;
+
+        int b = GETARG_B(i) - 1;
+        int j;
+        int n = cast_int(base - ci->func) - cl->p->numparams - 1;
+        if (b < 0) {  /* B == 0? */
+          b = n;  /* get all var. arguments */
+          Protect(luaD_checkstack(L, n));
+          ra = RA(i);  /* previous call may change the stack */
+          L->top = ra + n;
+        }
+        for (j = 0; j < b; j++) {
+          if (j < n) {
+            setobjs2s(L, ra + j, base - n + j);
+          }
+          else {
+            setnilvalue(ra + j);
+          }
+        }
+#endif
 }
 
 void Compiler::CompileCheckcg(llvm::Value* reg) {
@@ -506,9 +586,23 @@ void Compiler::SetRegister(llvm::Value* reg, llvm::Value* value) {
     builder_.CreateStore(value_mem, reg_memptr);
 }
 
+void Compiler::ReloadTop() {
+    auto top = LoadField(values_.ci, rt_->GetType("TValue"),
+            offsetof(CallInfo, top), "top");
+    SetField(values_.state, top, offsetof(lua_State, top), "top");
+}
+
 void Compiler::SetTop(int reg) {
     auto top = GetValueR(reg, "top");
     SetField(values_.state, top, offsetof(lua_State, top), "top");
+}
+
+llvm::Value* Compiler::TopDiff(int n) {
+    auto top = LoadField(values_.state, rt_->GetType("TValue"),
+            offsetof(lua_State, top), "top");
+    auto r = GetValueR(n, "r");
+    auto diff = builder_.CreatePtrDiff(top, r, "diff");
+    return builder_.CreateIntCast(diff, MakeIntT(sizeof(int)), false, "idiff");
 }
 
 void Compiler::UpdateStack() {

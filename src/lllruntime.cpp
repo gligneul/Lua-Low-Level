@@ -16,6 +16,7 @@
 
 extern "C" {
 #include "lprefix.h"
+#include "ldebug.h"
 #include "lfunc.h"
 #include "lgc.h"
 #include "lopcodes.h"
@@ -232,6 +233,66 @@ static int lll_forloop(TValue* ra) {
     return goback;
 }
 
+static int forlimit (const TValue *obj, lua_Integer *p, lua_Integer step,
+                     int *stopnow) {
+  *stopnow = 0;  /* usually, let loops run */
+  if (!luaV_tointeger(obj, p, (step < 0 ? 2 : 1))) {  /* not fit in integer? */
+    lua_Number n;  /* try to convert to float */
+    if (!tonumber(obj, &n)) /* cannot convert to float? */
+      return 0;  /* not a number */
+    if (luai_numlt(0, n)) {  /* if true, float is larger than max integer */
+      *p = LUA_MAXINTEGER;
+      if (step < 0) *stopnow = 1;
+    }
+    else {  /* float is smaller than min integer */
+      *p = LUA_MININTEGER;
+      if (step >= 0) *stopnow = 1;
+    }
+  }
+  return 1;
+}
+
+static void lll_forprep (lua_State *L, TValue *ra)
+{
+    TValue *init = ra;
+    TValue *plimit = ra + 1;
+    TValue *pstep = ra + 2;
+    lua_Integer ilimit;
+    int stopnow;
+    if (ttisinteger(init) && ttisinteger(pstep) &&
+        forlimit(plimit, &ilimit, ivalue(pstep), &stopnow)) {
+      /* all values are integer */
+      lua_Integer initv = (stopnow ? 0 : ivalue(init));
+      setivalue(plimit, ilimit);
+      setivalue(init, initv - ivalue(pstep));
+    }
+    else {  /* try making all values floats */
+      lua_Number ninit; lua_Number nlimit; lua_Number nstep;
+      if (!tonumber(plimit, &nlimit))
+        luaG_runerror(L, "'for' limit must be a number");
+      setfltvalue(plimit, nlimit);
+      if (!tonumber(pstep, &nstep))
+        luaG_runerror(L, "'for' step must be a number");
+      setfltvalue(pstep, nstep);
+      if (!tonumber(init, &ninit))
+        luaG_runerror(L, "'for' initial value must be a number");
+      setfltvalue(init, luai_numsub(L, ninit, nstep));
+    }
+}
+
+static void lll_setlist(lua_State* L, TValue* ra, int fields, int n)
+{
+    Table* h = hvalue(ra);
+    unsigned int last = fields + n;
+    if (last > h->sizearray)
+        luaH_resizearray(L, h, last);
+    for (; n > 0; n--) {
+        TValue* val = ra + n;
+        luaH_setint(L, h, last--, val);
+        luaC_barrierback(L, h, val);
+    }
+}
+
 namespace lll {
 
 Runtime* Runtime::instance_ = nullptr;
@@ -316,6 +377,8 @@ void Runtime::InitFunctions() {
     ADDFUNCTION(lll_newtable, table, lstate, tvalue);
     ADDFUNCTION(lll_upvalbarrier, voidt, lstate, upval);
     ADDFUNCTION(lll_forloop, intt, tvalue);
+    ADDFUNCTION(lll_forprep, voidt, lstate, tvalue);
+    ADDFUNCTION(lll_setlist, voidt, lstate, tvalue, intt, intt);
     ADDFUNCTION(luaH_resize, voidt, lstate, table, intt, intt);
     ADDFUNCTION(luaV_gettable, voidt, lstate, tvalue, tvalue, tvalue);
     ADDFUNCTION(luaV_settable, voidt, lstate, tvalue, tvalue, tvalue);

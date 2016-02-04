@@ -83,6 +83,12 @@ private:
     void CompileCall();
     void CompileReturn();
     void CompileForloop();
+    void CompileForprep();
+    void CompileTforcall();
+    void CompileTforloop();
+    void CompileSetlist();
+    void CompileClosure();
+    void CompileVararg();
     void CompileCheckcg(llvm::Value* reg);
 
     // Makes a llvm int type
@@ -120,8 +126,14 @@ private:
     // Sets a register with a value
     void SetRegister(llvm::Value* reg, llvm::Value* value);
 
+    // Sets L->top = ci->top
+    void ReloadTop();
+
     // Sets the top of the stack
     void SetTop(int reg);
+
+    // Returns the ptrdiff from R(n) to top
+    llvm::Value* TopDiff(int n);
 
     // Updates the func variable; should be called before getting a register
     void UpdateStack();

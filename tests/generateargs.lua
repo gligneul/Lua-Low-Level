@@ -5,8 +5,8 @@
 --
 -- generateargs.lua
 
-local values = {'nil', 'true', 'false', '-5000', '0', '123', '0.00001', '1.23',
-        '10e999', '"0"', '"15.4"', '"a"'}
+local default_values = {'nil', 'true', 'false', '-5000', '0', '123', '0.00001',
+        '1.23', '10e999', '"0"', '"15.4"', '"a"'}
 
 local function copylist(l)
     local out = {}
@@ -16,7 +16,7 @@ local function copylist(l)
     return out
 end
 
-local function generateargs(args, n)
+local function generateargs(args, n, values)
     if n == 0 then
         return args
     else
@@ -28,12 +28,13 @@ local function generateargs(args, n)
                 table.insert(newargs, newa)
             end
         end
-        return generateargs(newargs, n - 1)
+        return generateargs(newargs, n - 1, values)
     end
 end
 
--- Creates lists of size $n containing all possible combination values
-return function(n)
-    return generateargs({{}}, n)
+-- Creates lists of size $n containing all possible combination of $values 
+return function(n, values)
+    values = values or default_values
+    return generateargs({{}}, n, values)
 end
 
