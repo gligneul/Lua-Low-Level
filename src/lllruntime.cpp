@@ -293,6 +293,51 @@ static void lll_setlist(lua_State* L, TValue* ra, int fields, int n)
     }
 }
 
+static LClosure *getcached (Proto *p, UpVal **encup, StkId base) {
+  LClosure *c = p->cache;
+  if (c != NULL) {  /* is there a cached closure? */
+    int nup = p->sizeupvalues;
+    Upvaldesc *uv = p->upvalues;
+    int i;
+    for (i = 0; i < nup; i++) {  /* check whether it has right upvalues */
+      TValue *v = uv[i].instack ? base + uv[i].idx : encup[uv[i].idx]->v;
+      if (c->upvals[i]->v != v)
+        return NULL;  /* wrong upvalue; cannot reuse closure */
+    }
+  }
+  return c;  /* return cached closure (or NULL if no cached closure) */
+}
+
+static void pushclosure (lua_State *L, Proto *p, UpVal **encup, StkId base,
+                         StkId ra) {
+  int nup = p->sizeupvalues;
+  Upvaldesc *uv = p->upvalues;
+  int i;
+  LClosure *ncl = luaF_newLclosure(L, nup);
+  ncl->p = p;
+  setclLvalue(L, ra, ncl);  /* anchor new closure in stack */
+  for (i = 0; i < nup; i++) {  /* fill in its upvalues */
+    if (uv[i].instack)  /* upvalue refers to local variable? */
+      ncl->upvals[i] = luaF_findupval(L, base + uv[i].idx);
+    else  /* get upvalue from enclosing function */
+      ncl->upvals[i] = encup[uv[i].idx];
+    ncl->upvals[i]->refcount++;
+    /* new closure is white, so we do not need a barrier here */
+  }
+  if (!isblack(p))  /* cache will not break GC invariant? */
+    p->cache = ncl;  /* save it on cache for reuse */
+}
+
+static void lll_closure(lua_State* L, LClosure* cl, TValue* base, TValue* ra,
+        int bx) {
+    Proto *p = cl->p->p[bx];
+    LClosure *ncl = getcached(p, cl->upvals, base);  /* cached closure */
+    if (ncl == NULL)  /* no match? */
+        pushclosure(L, p, cl->upvals, base, ra);  /* create a new one */
+    else
+        setclLvalue(L, ra, ncl);  /* push cashed closure */
+}
+
 namespace lll {
 
 Runtime* Runtime::instance_ = nullptr;
@@ -344,18 +389,19 @@ void Runtime::InitFunctions() {
         AddFunction(#function, type, reinterpret_cast<void*>(function)); }
 
     #define LOADBINOP(function) \
-        ADDFUNCTION(function, voidt, lstate, tvalue, tvalue, tvalue)
+        ADDFUNCTION(function, tvoid, tstate, tvalue, tvalue, tvalue)
 
     #define LOADUNOP(function) \
-        ADDFUNCTION(function, voidt, lstate, tvalue, tvalue)
+        ADDFUNCTION(function, tvoid, tstate, tvalue, tvalue)
 
-    llvm::Type* lstate = types_["lua_State"];
+    llvm::Type* tstate = types_["lua_State"];
+    llvm::Type* tclosure = types_["LClosure"];
     llvm::Type* tvalue = types_["TValue"];
-    llvm::Type* ci = types_["CallInfo"];
-    llvm::Type* table = types_["Table"];
-    llvm::Type* upval = types_["UpVal"];
-    llvm::Type* voidt = llvm::Type::getVoidTy(context_);
-    llvm::Type* intt = llvm::IntegerType::get(context_, 8 * sizeof(int));
+    llvm::Type* tci = types_["CallInfo"];
+    llvm::Type* ttable = types_["Table"];
+    llvm::Type* tupval = types_["UpVal"];
+    llvm::Type* tvoid = llvm::Type::getVoidTy(context_);
+    llvm::Type* tint = llvm::IntegerType::get(context_, 8 * sizeof(int));
 
     LOADBINOP(lll_addrr);
     LOADBINOP(lll_subrr);
@@ -372,22 +418,23 @@ void Runtime::InitFunctions() {
     LOADUNOP(lll_unm);
     LOADUNOP(lll_bnot);
     LOADUNOP(lll_not);
-    ADDFUNCTION(lll_test, intt, intt, tvalue);
-    ADDFUNCTION(lll_checkcg, voidt, lstate, ci, tvalue);
-    ADDFUNCTION(lll_newtable, table, lstate, tvalue);
-    ADDFUNCTION(lll_upvalbarrier, voidt, lstate, upval);
-    ADDFUNCTION(lll_forloop, intt, tvalue);
-    ADDFUNCTION(lll_forprep, voidt, lstate, tvalue);
-    ADDFUNCTION(lll_setlist, voidt, lstate, tvalue, intt, intt);
-    ADDFUNCTION(luaH_resize, voidt, lstate, table, intt, intt);
-    ADDFUNCTION(luaV_gettable, voidt, lstate, tvalue, tvalue, tvalue);
-    ADDFUNCTION(luaV_settable, voidt, lstate, tvalue, tvalue, tvalue);
+    ADDFUNCTION(lll_test, tint, tint, tvalue);
+    ADDFUNCTION(lll_checkcg, tvoid, tstate, tci, tvalue);
+    ADDFUNCTION(lll_newtable, ttable, tstate, tvalue);
+    ADDFUNCTION(lll_upvalbarrier, tvoid, tstate, tupval);
+    ADDFUNCTION(lll_forloop, tint, tvalue);
+    ADDFUNCTION(lll_forprep, tvoid, tstate, tvalue);
+    ADDFUNCTION(lll_setlist, tvoid, tstate, tvalue, tint, tint);
+    ADDFUNCTION(lll_closure, tvoid, tstate, tclosure, tvalue, tvalue, tint);
+    ADDFUNCTION(luaH_resize, tvoid, tstate, ttable, tint, tint);
+    ADDFUNCTION(luaV_gettable, tvoid, tstate, tvalue, tvalue, tvalue);
+    ADDFUNCTION(luaV_settable, tvoid, tstate, tvalue, tvalue, tvalue);
     LOADUNOP(luaV_objlen);
-    ADDFUNCTION(luaV_concat, voidt, lstate, intt);
-    ADDFUNCTION(luaV_equalobj, intt, lstate, tvalue, tvalue);
-    ADDFUNCTION(luaV_lessthan, intt, lstate, tvalue, tvalue);
-    ADDFUNCTION(luaV_lessequal, intt, lstate, tvalue, tvalue);
-    ADDFUNCTION(luaD_call, voidt, lstate, tvalue, intt, intt);
+    ADDFUNCTION(luaV_concat, tvoid, tstate, tint);
+    ADDFUNCTION(luaV_equalobj, tint, tstate, tvalue, tvalue);
+    ADDFUNCTION(luaV_lessthan, tint, tstate, tvalue, tvalue);
+    ADDFUNCTION(luaV_lessequal, tint, tstate, tvalue, tvalue);
+    ADDFUNCTION(luaD_call, tvoid, tstate, tvalue, tint, tint);
 }
 
 void Runtime::AddType(const std::string& name, size_t size) {

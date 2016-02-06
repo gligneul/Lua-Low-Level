@@ -10,14 +10,16 @@ local a
 local get = lll.compile(function() return a end)
 local set = lll.compile(function(v) a = v end)
 
-assert(a == nil and get() == nil)
+local function testupval(v)
+    set(v)
+    assert(a == v and get() == v)
+end
 
-a = 10
-assert(a == 10 and get() == 10)
+testupval(nil)
+testupval(3.14)
+testupval(nil)
+testupval('abc')
+testupval(nil)
 
-set('abc')
-assert(a == 'abc' and get() == 'abc')
-
-set(nil)
-assert(a == nil and get() == nil)
-
+local function foo() end
+testupval(foo)

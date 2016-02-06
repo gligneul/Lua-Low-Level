@@ -120,8 +120,10 @@ private:
     // Gets the upvalue $n
     llvm::Value* GetUpval(int n);
 
-    // Obtains a runtime function
-    llvm::Function* GetFunction(const std::string& name);
+    // Create a function call
+    llvm::Value* CreateCall(const std::string& name,
+            std::initializer_list<llvm::Value*> args,
+            const std::string& retname = "");
 
     // Sets a register with a value
     void SetRegister(llvm::Value* reg, llvm::Value* value);

@@ -230,7 +230,7 @@ void Compiler::CompileGettabup() {
         GetValueRK(GETARG_C(instr_), "rkc"),
         GetValueR(GETARG_A(instr_), "ra")
     };
-    builder_.CreateCall(GetFunction("luaV_gettable"), args);
+    CreateCall("luaV_gettable", args);
 }
 
 void Compiler::CompileGettable() {
@@ -241,7 +241,7 @@ void Compiler::CompileGettable() {
         GetValueRK(GETARG_C(instr_), "rkc"),
         GetValueR(GETARG_A(instr_), "ra")
     };
-    builder_.CreateCall(GetFunction("luaV_gettable"), args);
+    CreateCall("luaV_gettable", args);
 }
 
 void Compiler::CompileSettabup() {
@@ -252,7 +252,7 @@ void Compiler::CompileSettabup() {
         GetValueRK(GETARG_B(instr_), "rkb"),
         GetValueRK(GETARG_C(instr_), "rkc")
     };
-    builder_.CreateCall(GetFunction("luaV_settable"), args);
+    CreateCall("luaV_settable", args);
 }
 
 void Compiler::CompileSetupval() {
@@ -264,7 +264,7 @@ void Compiler::CompileSetupval() {
     auto ra = GetValueR(GETARG_A(instr_), "ra");
     SetRegister(v, ra);
     auto args = {values_.state, upval};
-    builder_.CreateCall(GetFunction("lll_upvalbarrier"), args);
+    CreateCall("lll_upvalbarrier", args);
 }
 
 void Compiler::CompileSettable() {
@@ -275,7 +275,7 @@ void Compiler::CompileSettable() {
         GetValueRK(GETARG_B(instr_), "rkb"),
         GetValueRK(GETARG_C(instr_), "rkc")
     };
-    builder_.CreateCall(GetFunction("luaV_settable"), args);
+    CreateCall("luaV_settable", args);
 }
 
 void Compiler::CompileNewtable() {
@@ -284,10 +284,10 @@ void Compiler::CompileNewtable() {
     int b = GETARG_B(instr_);
     int c = GETARG_C(instr_);
     auto args = {values_.state, GetValueR(a, "ra")};
-    auto table = builder_.CreateCall(GetFunction("lll_newtable"), args);
+    auto table = CreateCall("lll_newtable", args);
     if (b != 0 || c != 0) {
         args = {values_.state, table, MakeInt(b), MakeInt(c)};
-        builder_.CreateCall(GetFunction("luaH_resize"), args);
+        CreateCall("luaH_resize", args);
     }
     CompileCheckcg(GetValueR(a + 1, "next"));
 }
@@ -303,7 +303,7 @@ void Compiler::CompileSelf() {
         GetValueRK(GETARG_C(instr_), "rkc"),
         GetValueR(GETARG_A(instr_), "ra")
     };
-    builder_.CreateCall(GetFunction("luaV_gettable"), args);
+    CreateCall("luaV_gettable", args);
 }
 
 void Compiler::CompileBinop(const std::string& function) {
@@ -314,7 +314,7 @@ void Compiler::CompileBinop(const std::string& function) {
         GetValueRK(GETARG_B(instr_), "rkb"),
         GetValueRK(GETARG_C(instr_), "rkc")
     };
-    builder_.CreateCall(GetFunction(function), args);
+    CreateCall(function, args);
 }
 
 void Compiler::CompileUnop(const std::string& function) {
@@ -324,7 +324,7 @@ void Compiler::CompileUnop(const std::string& function) {
         GetValueR(GETARG_A(instr_), "ra"),
         GetValueRK(GETARG_B(instr_), "rkb")
     };
-    builder_.CreateCall(GetFunction(function), args);
+    CreateCall(function, args);
 }
 
 void Compiler::CompileConcat() {
@@ -334,7 +334,7 @@ void Compiler::CompileConcat() {
     int c = GETARG_C(instr_);
     SetTop(c + 1);
     auto args = {values_.state, MakeInt(c - b + 1)};
-    builder_.CreateCall(GetFunction("luaV_concat"), args);
+    CreateCall("luaV_concat", args);
 
     UpdateStack();
     auto ra = GetValueR(a, "ra");
@@ -360,7 +360,7 @@ void Compiler::CompileCmp(const std::string& function) {
         GetValueRK(GETARG_B(instr_), "rkb"),
         GetValueRK(GETARG_C(instr_), "rkc")
     };
-    auto result = builder_.CreateCall(GetFunction(function), args, "result");
+    auto result = CreateCall(function, args, "result");
     auto a = MakeInt(GETARG_A(instr_));
     auto cmp = builder_.CreateICmpNE(result, a, "cmp");
     builder_.CreateCondBr(cmp, blocks_[curr_ + 2], blocks_[curr_ + 1]);
@@ -369,8 +369,7 @@ void Compiler::CompileCmp(const std::string& function) {
 void Compiler::CompileTest() {
     UpdateStack();
     auto args = {MakeInt(GETARG_C(instr_)), GetValueR(GETARG_A(instr_), "ra")};
-    auto result = ToBool(builder_.CreateCall(GetFunction("lll_test"), args,
-            "result"));
+    auto result = ToBool(CreateCall("lll_test", args, "result"));
     builder_.CreateCondBr(result, blocks_[curr_ + 2], blocks_[curr_ + 1]);
 }
 
@@ -378,8 +377,7 @@ void Compiler::CompileTestset() {
     UpdateStack();
     auto rb = GetValueR(GETARG_B(instr_), "rb");
     auto args = {MakeInt(GETARG_C(instr_)), rb};
-    auto result = ToBool(builder_.CreateCall(GetFunction("lll_test"), args,
-            "result"));
+    auto result = ToBool(CreateCall("lll_test", args, "result"));
     auto setblock = CreateSubBlock("set");
     builder_.CreateCondBr(result, blocks_[curr_ + 2], setblock);
     builder_.SetInsertPoint(setblock);
@@ -400,7 +398,7 @@ void Compiler::CompileCall() {
         MakeInt(GETARG_C(instr_) - 1),
         MakeInt(0)
     };
-    builder_.CreateCall(GetFunction("luaD_call"), args);
+    CreateCall("luaD_call", args);
 }
 
 void Compiler::CompileReturn() {
@@ -422,8 +420,7 @@ void Compiler::CompileReturn() {
 void Compiler::CompileForloop() {
     UpdateStack();
     auto ra = GetValueR(GETARG_A(instr_), "ra");
-    auto jump = ToBool(builder_.CreateCall(GetFunction("lll_forloop"), {ra},
-            "jump"));
+    auto jump = ToBool(CreateCall("lll_forloop", {ra}, "jump"));
     auto jumpblock = blocks_[curr_ + 1 + GETARG_sBx(instr_)];
     builder_.CreateCondBr(jump, jumpblock, blocks_[curr_ + 1]);
 }
@@ -431,7 +428,7 @@ void Compiler::CompileForloop() {
 void Compiler::CompileForprep() {
     UpdateStack();
     auto args = {values_.state, GetValueR(GETARG_A(instr_), "ra")};
-    builder_.CreateCall(GetFunction("lll_forprep"), args);
+    CreateCall("lll_forprep", args);
     builder_.CreateBr(blocks_[curr_ + 1 + GETARG_sBx(instr_)]);
 }
 
@@ -449,7 +446,7 @@ void Compiler::CompileTforcall() {
         MakeInt(GETARG_C(instr_)),
         MakeInt(0)
     };
-    builder_.CreateCall(GetFunction("luaD_call"), args);
+    CreateCall("luaD_call", args);
     ReloadTop();
 }
 
@@ -482,21 +479,21 @@ void Compiler::CompileSetlist() {
     auto fields = MakeInt((c - 1) * LFIELDS_PER_FLUSH);
 
     auto args = {values_.state, GetValueR(a, "ra"), fields, n};
-    builder_.CreateCall(GetFunction("lll_setlist"), args);
+    CreateCall("lll_setlist", args);
     ReloadTop();
 }
 
 void Compiler::CompileClosure() {
-#if 0
-        Proto *p = cl->p->p[GETARG_Bx(i)];
-        LClosure *ncl = getcached(p, cl->upvals, base);  /* cached closure */
-        if (ncl == NULL)  /* no match? */
-          pushclosure(L, p, cl->upvals, base, ra);  /* create a new one */
-        else
-          setclLvalue(L, ra, ncl);  /* push cashed closure */
-        checkGC(L, ra + 1);
-        vmbreak;
-#endif
+    UpdateStack();
+    auto args = {
+        values_.state,
+        values_.closure,
+        GetValueR(0, "base"),
+        GetValueR(GETARG_A(instr_), "ra"),
+        MakeInt(GETARG_Bx(instr_))
+    };
+    CreateCall("lll_closure", args);
+    CompileCheckcg(GetValueR(GETARG_A(instr_) + 1, "ra1"));
 }
 
 void Compiler::CompileVararg() {
@@ -525,7 +522,7 @@ void Compiler::CompileVararg() {
 
 void Compiler::CompileCheckcg(llvm::Value* reg) {
     auto args = {values_.state, values_.ci, reg};
-    builder_.CreateCall(GetFunction("lll_checkcg"), args);
+    CreateCall("lll_checkcg", args);
 }
 
 llvm::Type* Compiler::MakeIntT(int nbytes) {
@@ -582,8 +579,10 @@ llvm::Value* Compiler::GetUpval(int n) {
     return LoadField(upval, rt_->GetType("TValue"), offsetof(UpVal, v), "val");
 }
 
-llvm::Function* Compiler::GetFunction(const std::string& name) {
-    return rt_->GetFunction(module_.get(), name);
+llvm::Value* Compiler::CreateCall(const std::string& name,
+        std::initializer_list<llvm::Value*> args, const std::string& retname) {
+    auto f = rt_->GetFunction(module_.get(), name);
+    return builder_.CreateCall(f, args, retname);
 }
 
 void Compiler::SetRegister(llvm::Value* reg, llvm::Value* value) {

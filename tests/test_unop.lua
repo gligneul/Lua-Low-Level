@@ -1,3 +1,4 @@
+#!src/lua
 -- LLL - Lua Low Level
 -- September, 2015
 -- Author: Gabriel de Quadros Ligneul
