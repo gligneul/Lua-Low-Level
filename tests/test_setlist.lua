@@ -8,14 +8,15 @@
 
 local compare = require 'tests/compare'
 
-local a
-assert(a == nil)
+function testsetlist(l)
+    local correctlist = load('return {' .. l .. '}')()
+    local jitlist = load('return \
+            lll.compile(function() return {' .. l .. '} end)()')()
+    assert(compare(correctlist, jitlist))
+end
 
-lll.compile(function() a = {'a', 1, 0.8} end)()
-assert(compare(a, {'a', 1, 0.8}))
-
-local function f() return 'b', 2 end
-lll.compile(function() a = {f()} end)()
-assert(compare(a, {'b', 2}))
-
+function f() return 'b', 2 end
+testsetlist('f()')
+testsetlist('"a", 1, 0.8')
+testsetlist('["a"] = 3, [-1] = "a", [0] = "b", [2] = "c"')
 

@@ -18,6 +18,7 @@ local modules = {
     'for',
     'optest',
     'self',
+    'setlist',
     'table',
     'tabup',
     'unop',

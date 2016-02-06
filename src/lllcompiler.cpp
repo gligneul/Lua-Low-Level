@@ -478,7 +478,7 @@ void Compiler::CompileSetlist() {
     if (c == 0)
         c = GETARG_Ax(lclosure_->p->code[curr_ + 1]);
 
-    auto n = (b != 0 ? MakeInt(b) : TopDiff(a - 1));
+    auto n = (b != 0 ? MakeInt(b) : TopDiff(a + 1));
     auto fields = MakeInt((c - 1) * LFIELDS_PER_FLUSH);
 
     auto args = {values_.state, GetValueR(a, "ra"), fields, n};
