@@ -27,6 +27,36 @@ extern "C" {
 
 #include "lllruntime.h"
 
+namespace {
+
+void LLLGetTable(lua_State* L, TValue* t, TValue* k, TValue* v) {
+    const TValue *aux;
+    if (luaV_fastget(L, t, k, aux, luaH_get)) {
+        setobj2s(L, v, aux);
+    } else {
+        luaV_finishget(L, t, k, v, aux);
+    }
+}
+
+void LLLSetTable(lua_State* L, TValue* t, TValue* k, TValue* v) {
+    const TValue *slot;
+    if (!luaV_fastset(L, t, k, slot, luaH_get, v))
+        luaV_finishset(L, t, k, v, slot);
+}
+
+void LLLSelf(lua_State* L, TValue* ra, TValue* rb, TValue* rc) {
+    const TValue *aux;
+    TString *key = tsvalue(rc);
+    setobjs2s(L, ra + 1, rb);
+    if (luaV_fastget(L, rb, key, aux, luaH_getstr)) {
+        setobj2s(L, ra, aux);
+    } else {
+        luaV_finishget(L, rb, rc, ra, aux);
+    }
+}
+
+}
+
 static void lll_addrr (lua_State *L, TValue *ra, TValue *rb, TValue *rc) {
   lua_Number nb, nc;
   if (ttisinteger(rb) && ttisinteger(rc)) {
@@ -189,11 +219,9 @@ static int lll_test (int c, TValue *r) {
 }
 
 static void lll_checkcg (lua_State *L, CallInfo *ci, TValue *c) {
-  // From lvm.c checkGC(L,c)
-  luaC_condGC(L, {L->top = (c);
-                  luaC_step(L);
-                  L->top = ci->top;});
-  luai_threadyield(L);
+    // From lvm.c checkGC(L,c)
+    luaC_condGC(L, L->top = (c), L->top = ci->top);
+    luai_threadyield(L);
 }
 
 static Table *lll_newtable (lua_State *L, TValue *r) {
@@ -403,6 +431,10 @@ void Runtime::InitFunctions() {
     llvm::Type* tvoid = llvm::Type::getVoidTy(context_);
     llvm::Type* tint = llvm::IntegerType::get(context_, 8 * sizeof(int));
 
+    ADDFUNCTION(LLLGetTable, tvoid, tstate, tvalue, tvalue, tvalue);
+    ADDFUNCTION(LLLSetTable, tvoid, tstate, tvalue, tvalue, tvalue);
+    ADDFUNCTION(LLLSelf, tvoid, tstate, tvalue, tvalue, tvalue);
+
     LOADBINOP(lll_addrr);
     LOADBINOP(lll_subrr);
     LOADBINOP(lll_mulrr);
@@ -415,9 +447,11 @@ void Runtime::InitFunctions() {
     LOADBINOP(lll_modrr);
     LOADBINOP(lll_idivrr);
     LOADBINOP(lll_powrr);
+
     LOADUNOP(lll_unm);
     LOADUNOP(lll_bnot);
     LOADUNOP(lll_not);
+
     ADDFUNCTION(lll_test, tint, tint, tvalue);
     ADDFUNCTION(lll_checkcg, tvoid, tstate, tci, tvalue);
     ADDFUNCTION(lll_newtable, ttable, tstate, tvalue);
@@ -427,14 +461,12 @@ void Runtime::InitFunctions() {
     ADDFUNCTION(lll_setlist, tvoid, tstate, tvalue, tint, tint);
     ADDFUNCTION(lll_closure, tvoid, tstate, tclosure, tvalue, tvalue, tint);
     ADDFUNCTION(luaH_resize, tvoid, tstate, ttable, tint, tint);
-    ADDFUNCTION(luaV_gettable, tvoid, tstate, tvalue, tvalue, tvalue);
-    ADDFUNCTION(luaV_settable, tvoid, tstate, tvalue, tvalue, tvalue);
     LOADUNOP(luaV_objlen);
     ADDFUNCTION(luaV_concat, tvoid, tstate, tint);
     ADDFUNCTION(luaV_equalobj, tint, tstate, tvalue, tvalue);
     ADDFUNCTION(luaV_lessthan, tint, tstate, tvalue, tvalue);
     ADDFUNCTION(luaV_lessequal, tint, tstate, tvalue, tvalue);
-    ADDFUNCTION(luaD_call, tvoid, tstate, tvalue, tint, tint);
+    ADDFUNCTION(luaD_call, tvoid, tstate, tvalue, tint);
 }
 
 void Runtime::AddType(const std::string& name, size_t size) {

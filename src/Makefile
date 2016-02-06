@@ -209,14 +209,14 @@ lvm.o: lvm.c lprefix.h lua.h luaconf.h ldebug.h lstate.h lobject.h \
 lzio.o: lzio.c lprefix.h lua.h luaconf.h llimits.h lmem.h lstate.h \
   lobject.h ltm.h lzio.h
 lllcompiler.o: lllcompiler.cpp lllcompiler.h llimits.h lua.h luaconf.h \
- lllengine.h lllruntime.h lprefix.h lfunc.h lobject.h lgc.h lstate.h \
- ltm.h lzio.h lmem.h lopcodes.h lvm.h ldo.h ltable.h
+  lllengine.h lllruntime.h lprefix.h lfunc.h lobject.h lgc.h lstate.h \
+  ltm.h lzio.h lmem.h lopcodes.h lvm.h ldo.h ltable.h
 lllcore.o: lllcore.cpp lllcompiler.h llimits.h lua.h luaconf.h \
- lllengine.h lprefix.h lapi.h lstate.h lobject.h ltm.h lzio.h lmem.h \
- lauxlib.h lllcore.h
+  lllengine.h lprefix.h lapi.h lstate.h lobject.h ltm.h lzio.h lmem.h \
+  lauxlib.h lllcore.h
 lllengine.o: lllengine.cpp lllengine.h
-lllruntime.o: lllruntime.cpp lprefix.h lfunc.h lobject.h llimits.h lua.h \
- luaconf.h lgc.h lstate.h ltm.h lzio.h lmem.h lopcodes.h lvm.h ldo.h \
- ltable.h lllruntime.h
+lllruntime.o: lllruntime.cpp lprefix.h ldebug.h lstate.h lua.h luaconf.h \
+  lobject.h llimits.h ltm.h lzio.h lmem.h lfunc.h lgc.h lopcodes.h lvm.h \
+  ldo.h ltable.h lllruntime.h
 
 # (end of Makefile)

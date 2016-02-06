@@ -230,7 +230,7 @@ void Compiler::CompileGettabup() {
         GetValueRK(GETARG_C(instr_), "rkc"),
         GetValueR(GETARG_A(instr_), "ra")
     };
-    CreateCall("luaV_gettable", args);
+    CreateCall("LLLGetTable", args);
 }
 
 void Compiler::CompileGettable() {
@@ -241,7 +241,7 @@ void Compiler::CompileGettable() {
         GetValueRK(GETARG_C(instr_), "rkc"),
         GetValueR(GETARG_A(instr_), "ra")
     };
-    CreateCall("luaV_gettable", args);
+    CreateCall("LLLGetTable", args);
 }
 
 void Compiler::CompileSettabup() {
@@ -252,7 +252,7 @@ void Compiler::CompileSettabup() {
         GetValueRK(GETARG_B(instr_), "rkb"),
         GetValueRK(GETARG_C(instr_), "rkc")
     };
-    CreateCall("luaV_settable", args);
+    CreateCall("LLLSetTable", args);
 }
 
 void Compiler::CompileSetupval() {
@@ -275,7 +275,7 @@ void Compiler::CompileSettable() {
         GetValueRK(GETARG_B(instr_), "rkb"),
         GetValueRK(GETARG_C(instr_), "rkc")
     };
-    CreateCall("luaV_settable", args);
+    CreateCall("LLLSetTable", args);
 }
 
 void Compiler::CompileNewtable() {
@@ -286,24 +286,26 @@ void Compiler::CompileNewtable() {
     auto args = {values_.state, GetValueR(a, "ra")};
     auto table = CreateCall("lll_newtable", args);
     if (b != 0 || c != 0) {
-        args = {values_.state, table, MakeInt(b), MakeInt(c)};
+        args = {
+            values_.state,
+            table,
+            MakeInt(luaO_fb2int(b)),
+            MakeInt(luaO_fb2int(c))
+        };
         CreateCall("luaH_resize", args);
     }
-    CompileCheckcg(GetValueR(a + 1, "next"));
+    CompileCheckcg(GetValueR(a + 1, "ra1"));
 }
 
 void Compiler::CompileSelf() {
     UpdateStack();
-    auto rapp = GetValueR(GETARG_A(instr_) + 1, "rapp");
-    auto rb = GetValueR(GETARG_B(instr_), "rb");
-    SetRegister(rapp, rb);
     auto args = {
         values_.state,
-        rb,
-        GetValueRK(GETARG_C(instr_), "rkc"),
-        GetValueR(GETARG_A(instr_), "ra")
+        GetValueR(GETARG_A(instr_), "ra"),
+        GetValueR(GETARG_B(instr_), "rb"),
+        GetValueRK(GETARG_C(instr_), "rkc")
     };
-    CreateCall("luaV_gettable", args);
+    CreateCall("LLLSelf", args);
 }
 
 void Compiler::CompileBinop(const std::string& function) {
@@ -395,8 +397,7 @@ void Compiler::CompileCall() {
     auto args = {
         values_.state,
         GetValueR(a, "ra"),
-        MakeInt(GETARG_C(instr_) - 1),
-        MakeInt(0)
+        MakeInt(GETARG_C(instr_) - 1)
     };
     CreateCall("luaD_call", args);
 }
@@ -443,8 +444,7 @@ void Compiler::CompileTforcall() {
     auto args = {
         values_.state,
         GetValueR(cb, "cb"),
-        MakeInt(GETARG_C(instr_)),
-        MakeInt(0)
+        MakeInt(GETARG_C(instr_))
     };
     CreateCall("luaD_call", args);
     ReloadTop();
