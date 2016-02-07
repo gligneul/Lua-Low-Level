@@ -87,6 +87,16 @@ void Compiler::CreateBlocks() {
     values_.ci = LoadField(values_.state, rt_->GetType("CallInfo"),
             offsetof(lua_State, ci), "ci");
 
+#if 0
+// TODO: create function for creating debug messages
+    auto printtype = llvm::FunctionType::get(llvm::Type::getVoidTy(context_),
+            {llvm::PointerType::get(MakeIntT(1), 0)}, true);
+    auto print = llvm::Function::Create(printtype,
+                llvm::Function::ExternalLinkage, "printf", module_.get());
+    auto printargs = {builder_.CreateGlobalStringPtr("jitted")};
+    builder_.CreateCall(print, printargs);
+#endif
+
     for (size_t i = 0; i < blocks_.size(); ++i) {
         auto instruction = luaP_opnames[GET_OPCODE(lclosure_->p->code[i])];
         std::stringstream name;
@@ -399,11 +409,12 @@ void Compiler::CompileCall() {
         GetValueR(a, "ra"),
         MakeInt(GETARG_C(instr_) - 1)
     };
-    CreateCall("luaD_call", args);
+    CreateCall("luaD_callnoyield", args);
 }
 
 void Compiler::CompileReturn() {
     UpdateStack();
+        //if (cl->p->sizep > 0) luaF_close(L, base);
     int a = GETARG_A(instr_);
     int b = GETARG_B(instr_);
     llvm::Value* nresults = nullptr;
@@ -446,7 +457,7 @@ void Compiler::CompileTforcall() {
         GetValueR(cb, "cb"),
         MakeInt(GETARG_C(instr_))
     };
-    CreateCall("luaD_call", args);
+    CreateCall("luaD_callnoyield", args);
     ReloadTop();
 }
 

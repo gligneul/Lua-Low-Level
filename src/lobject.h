@@ -436,6 +436,17 @@ typedef struct Proto {
 typedef struct UpVal UpVal;
 
 
+
+/*
+** LLL Types
+*/
+
+/* Compiled function type
+** Returns the number of results */
+typedef int (*LLLFunction) (lua_State *, struct LClosure *);
+
+
+
 /*
 ** Closures
 */
@@ -453,6 +464,9 @@ typedef struct CClosure {
 typedef struct LClosure {
   ClosureHeader;
   struct Proto *p;
+  int ncalls;
+  LLLFunction lllfunction;
+  void *llldata;
   UpVal *upvals[1];  /* list of upvalues */
 } LClosure;
 

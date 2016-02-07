@@ -11,7 +11,8 @@ CC= clang
 CXX= clang++
 LD= clang++
 
-OPT= -O0 -g
+#OPT= -O0 -g
+OPT= -O3
 WARNINGS= -Wall -Wextra -Werror -Wno-pedantic
 
 CFLAGS= $(OPT) $(WARNINGS) -DLUA_COMPAT_5_2 $(SYSCFLAGS) $(MYCFLAGS)

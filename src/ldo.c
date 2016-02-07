@@ -32,6 +32,7 @@
 #include "lundump.h"
 #include "lvm.h"
 #include "lzio.h"
+#include "lllcore.h"
 
 
 
@@ -365,7 +366,10 @@ int luaD_precall (lua_State *L, StkId func, int nresults) {
     }
     case LUA_TLCL: {  /* Lua function: prepare its call */
       StkId base;
-      Proto *p = clLvalue(func)->p;
+      LClosure *cl = clLvalue(func);
+      if (++cl->ncalls > LLL_CALLS_TO_COMPILE)
+        LLLCompile(L, cl, NULL);
+      Proto *p = cl->p;
       int n = cast_int(L->top - func) - 1;  /* number of real arguments */
       int fsize = p->maxstacksize;  /* frame size */
       checkstackp(L, fsize, func);
@@ -386,7 +390,13 @@ int luaD_precall (lua_State *L, StkId func, int nresults) {
       ci->callstatus = CIST_LUA;
       if (L->hookmask & LUA_MASKCALL)
         callhook(L, ci);
-      return 0;
+      if (cl->lllfunction) {
+        int n = cl->lllfunction(L, cl);
+        luaD_poscall(L, ci, L->top - n, n);
+        return 1;
+      } else {
+        return 0;
+      }
     }
     default: {  /* not a function */
       checkstackp(L, 1, func);  /* ensure space for metamethod */

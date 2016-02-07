@@ -24,6 +24,7 @@
 #include "lstring.h"
 #include "ltable.h"
 #include "ltm.h"
+#include "lllcore.h"
 
 
 /*
@@ -690,6 +691,7 @@ static void freeLclosure (lua_State *L, LClosure *cl) {
       luaC_upvdeccount(L, uv);
   }
   luaM_freemem(L, cl, sizeLclosure(cl->nupvalues));
+  LLLFreeEngine(L, cl);
 }
 
 

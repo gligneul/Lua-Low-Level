@@ -466,7 +466,7 @@ void Runtime::InitFunctions() {
     ADDFUNCTION(luaV_equalobj, tint, tstate, tvalue, tvalue);
     ADDFUNCTION(luaV_lessthan, tint, tstate, tvalue, tvalue);
     ADDFUNCTION(luaV_lessequal, tint, tstate, tvalue, tvalue);
-    ADDFUNCTION(luaD_call, tvoid, tstate, tvalue, tint);
+    ADDFUNCTION(luaD_callnoyield, tvoid, tstate, tvalue, tint);
 }
 
 void Runtime::AddType(const std::string& name, size_t size) {

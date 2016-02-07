@@ -22,48 +22,41 @@ extern "C" {
 #include "lllcore.h"
 }
 
-#define GETENGINE(e) static_cast<lll::Engine *>(e->data)
+#define GETENGINE(cl) static_cast<lll::Engine *>(cl->llldata)
+#define SETENGINE(cl, e) { \
+    auto engine = e; \
+    cl->llldata = engine; \
+    cl->lllfunction = reinterpret_cast<LLLFunction>(engine->GetFunction()); }
 
-static void precall (lua_State *L, LLLEngine *e) {
-    Proto *proto = e->lclosure->p;
-    StkId args = L->ci->func + 1;
-    int in = L->top - args - 1;
-    int expected = proto->numparams;
-
-    // Remove first arg (userdata)
-    for (int i = 0; i < in; ++i)
-        setobj2s(L, args + i, args + i + 1);
-
-    // Fill missing args with nil
-    for (int i = in; i < expected; ++i)
-        setnilvalue(args + i);
-}
-
-LLLEngine *LLLCompile (lua_State *L, LClosure *lclosure, const char **error) {
-    lll::Compiler compiler(lclosure);
-    if (!compiler.Compile()) {
-        *error = lua_pushstring(L, compiler.GetErrorMessage().c_str());
-        return NULL;
+void writeerror (lua_State *L, char **outerr, const char *err) {
+    if (outerr) {
+        *outerr = luaM_newvector(L, strlen(err) + 1, char);
+        strcpy(*outerr, err);
     }
-    auto engine = compiler.GetEngine();
-    LLLEngine *e = luaM_new(L, LLLEngine);
-    e->function = reinterpret_cast<LLLFunction>(engine->GetFunction());
-    e->lclosure = lclosure;
-    e->data = engine;
-    return e;
 }
 
-void LLLFreeEngine (lua_State *L, LLLEngine *e) {
-    delete GETENGINE(e);
-    luaM_free(L, e);
+int LLLCompile (lua_State *L, LClosure *cl, char **errmsg) {
+    if (GETENGINE(cl) != NULL) {
+        writeerror(L, errmsg, "Function already compiled");
+        return 1;
+    }
+
+    lll::Compiler compiler(cl);
+    if (!compiler.Compile()) {
+        writeerror(L, errmsg, compiler.GetErrorMessage().c_str());
+        return 1;
+    }
+
+    SETENGINE(cl, compiler.GetEngine());
+    return 0;
 }
 
-int LLLCall (lua_State *L, LLLEngine *e) {
-    precall(L, e);
-    return e->function(L, e->lclosure);
+void LLLFreeEngine (lua_State *L, LClosure *cl) {
+    (void)L;
+    delete GETENGINE(cl);
 }
 
-void LLLDump (LLLEngine *e) {
-    GETENGINE(e)->Dump();
+void LLLDump (LClosure *cl) {
+    GETENGINE(cl)->Dump();
 }
 

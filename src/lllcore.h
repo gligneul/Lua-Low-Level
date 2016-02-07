@@ -35,28 +35,21 @@
 #include "lstate.h"
 #include "lobject.h"
 
-/* Compiled function type */
-typedef int (*LLLFunction) (lua_State*, LClosure*);
+/* Number of calls necessary to auto-compile */
+#ifndef LLL_CALLS_TO_COMPILE 
+#define LLL_CALLS_TO_COMPILE 50
+#endif
 
-/* Compiled function engine */
-typedef struct LLLEngine {
-    LLLFunction function;
-    LClosure *lclosure;
-    void *data;
-} LLLEngine;
+/* Compiles a function and attachs it to the closure
+** In success returns 0, else returns 1
+** If errmsg != NULL also returns the error message (must be freed) */
+int LLLCompile (lua_State *L, LClosure *cl, char **errmsg);
 
-/* Compiles a Lua function and returns the engine
-** If an error occurs, returns NULL and a message */
-LLLEngine *LLLCompile (lua_State *L, LClosure *lclosure, const char **error);
-
-/* Destroys an engine */
-void LLLFreeEngine (lua_State *L, LLLEngine *e);
-
-/* Executes the compiled function; Returns the number of results */
-int LLLCall (lua_State *L, LLLEngine *e);
+/* Destroys the engine */
+void LLLFreeEngine (lua_State *L, LClosure *cl);
 
 /* Dumps the LLMV function (debug) */
-void LLLDump (LLLEngine *e);
+void LLLDump (LClosure *cl);
 
 #endif
 

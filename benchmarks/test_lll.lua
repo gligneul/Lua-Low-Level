@@ -6,13 +6,13 @@
 --
 -- test_lll.lua
 
-local function _add(a, b)
+local function add(a, b)
     return a + b
 end
 
-local add = jit.compile(_add)
+assert(lll.compile(add))
 
-for i = 1, 10e6 do
+for i = 1, 10e5 do
     add(i, i)
 end
 
