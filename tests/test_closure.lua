@@ -6,12 +6,13 @@
 --
 -- test_closure.lua
 
-local function createbox_()
+local function createObject()
     local a = nil
     return function() return a end, function(v) a = v end
 end
-local createbox = lll.compile(createbox_)
-local get, set = createbox()
+
+assert(lll.compile(createObject))
+local get, set = createObject()
 
 local function testclosure(v)
     set(v)

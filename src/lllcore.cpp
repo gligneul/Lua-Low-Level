@@ -28,6 +28,8 @@ extern "C" {
     cl->llldata = engine; \
     cl->lllfunction = reinterpret_cast<LLLFunction>(engine->GetFunction()); }
 
+static int autocompile_ = 1;
+
 void writeerror (lua_State *L, char **outerr, const char *err) {
     if (outerr) {
         *outerr = luaM_newvector(L, strlen(err) + 1, char);
@@ -49,6 +51,18 @@ int LLLCompile (lua_State *L, LClosure *cl, char **errmsg) {
 
     SETENGINE(cl, compiler.GetEngine());
     return 0;
+}
+
+void LLLSetAutoCompile (int autocompile) {
+    autocompile_ = autocompile;
+}
+
+int LLLGetAutoCompile() {
+    return autocompile_;
+}
+
+int LLLIsCompiled (LClosure *cl) {
+    return GETENGINE(cl) != NULL;
 }
 
 void LLLFreeEngine (lua_State *L, LClosure *cl) {

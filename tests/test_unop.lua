@@ -13,7 +13,7 @@ local ops = {'-', '~', '#', 'not '}
 
 local functions = {}
 for _, op in ipairs(ops) do
-    f = 'return function(a) return ' .. op .. 'a end'
+    f = 'function(a) return ' .. op .. 'a end'
     table.insert(functions, f)
 end
 

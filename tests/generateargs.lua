@@ -6,7 +6,7 @@
 -- generateargs.lua
 
 local default_values = {'nil', 'true', 'false', '-5000', '0', '123', '0.00001',
-        '1.23', '10e999', '"0"', '"15.4"', '"a"'}
+        '1.23', '10e999', '"0"', '"15.4"', '"abc"'}
 
 local function copylist(l)
     local out = {}

@@ -366,10 +366,7 @@ int luaD_precall (lua_State *L, StkId func, int nresults) {
     }
     case LUA_TLCL: {  /* Lua function: prepare its call */
       StkId base;
-      LClosure *cl = clLvalue(func);
-      if (++cl->ncalls > LLL_CALLS_TO_COMPILE)
-        LLLCompile(L, cl, NULL);
-      Proto *p = cl->p;
+      Proto *p = clLvalue(func)->p;
       int n = cast_int(L->top - func) - 1;  /* number of real arguments */
       int fsize = p->maxstacksize;  /* frame size */
       checkstackp(L, fsize, func);
@@ -390,13 +387,19 @@ int luaD_precall (lua_State *L, StkId func, int nresults) {
       ci->callstatus = CIST_LUA;
       if (L->hookmask & LUA_MASKCALL)
         callhook(L, ci);
+
+      /* LLL auto compilation and execution */
+      LClosure *cl = clLvalue(func);
+      if (LLLGetAutoCompile() && !LLLIsCompiled(cl)
+          && ++(cl->ncalls) > LLL_CALLS_TO_COMPILE)
+        LLLCompile(L, cl, NULL);
       if (cl->lllfunction) {
         int n = cl->lllfunction(L, cl);
         luaD_poscall(L, ci, L->top - n, n);
         return 1;
-      } else {
-        return 0;
       }
+
+      return 0;
     }
     default: {  /* not a function */
       checkstackp(L, 1, func);  /* ensure space for metamethod */

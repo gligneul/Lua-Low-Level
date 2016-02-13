@@ -9,9 +9,10 @@
 local compare = require 'tests/compare'
 
 function testsetlist(l)
-    local correctlist = load('return {' .. l .. '}')()
-    local jitlist = load('return \
-            lll.compile(function() return {' .. l .. '} end)()')()
+    local f = load('return {' .. l .. '}')
+    local correctlist = f()
+    assert(lll.compile(f))
+    local jitlist = f()
     assert(compare(correctlist, jitlist))
 end
 

@@ -7,34 +7,18 @@
 -- test_basic.lua
 
 local executetests = require 'tests/executetests' 
+local generateargs = require 'tests/generateargs'
 
--- Create all possible combinations of parameters and returns
-local params = {'a, b, c'}
-local rets = {'', 'nil', '10', '12.3', '"abc"', '"abc", 123', 
-        'nil, 123', 'a', 'b', 'c', 'c, b', '123, c'}
-
-local functions = {}
-for _, p in ipairs(params) do
-    for _, r in ipairs(rets) do
-        f = 'return function(' .. p .. ') '
-        if r ~= '' then
-            f = f .. 'return ' .. r .. ' end'
-        else
-            f = f .. 'end'
-        end
-        table.insert(functions, f)
-    end
+local rets = {'a', 'b', 'c'}
+for _, v in ipairs(generateargs(1)) do
+    table.insert(rets, v[0])
 end
 
-local args = {
-    {},
-    {10},
-    {12.3},
-    {function() end},
-    {3, 5.7},
-    {nil, 123},
-    {'abc', function() end},
-}
+local functions = {}
+for _, r in ipairs(rets) do
+    local f = 'function(a, b, c) return ' .. r .. ' end'
+    table.insert(functions, f)
+end
 
-executetests(functions, args)
+executetests(functions, generateargs(3))
 

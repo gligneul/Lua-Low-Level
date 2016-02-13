@@ -13,7 +13,7 @@ local values = {'nil', 'true', 'false', '-4', '-0.1', '3', '5.5', '"20"',
         '"-3.5"', '"a"', 'function() end'}
 
 local f = [[
-return function(a, b, c)
+function(a, b, c)
     local sum = 0
     for i = a, b, c do
         sum = sum + i

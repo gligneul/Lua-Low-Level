@@ -45,6 +45,15 @@
 ** If errmsg != NULL also returns the error message (must be freed) */
 int LLLCompile (lua_State *L, LClosure *cl, char **errmsg);
 
+/* Enables or disables the auto compilation */
+void LLLSetAutoCompile (int autocompile);
+
+/* Returns whether the auto compilation is enable */
+int LLLGetAutoCompile();
+
+/* Returns whether the function is compiled */
+int LLLIsCompiled (LClosure *cl);
+
 /* Destroys the engine */
 void LLLFreeEngine (lua_State *L, LClosure *cl);
 

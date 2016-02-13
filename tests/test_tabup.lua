@@ -6,10 +6,10 @@
 --
 -- test_tabup.lua
 
-local function _get() return a end
-local function _set(val) a = val end
-local get = lll.compile(_get)
-local set = lll.compile(_set)
+local function get() return a end
+assert(lll.compile(get))
+local function set(val) a = val end
+assert(lll.compile(set))
 
 assert(get() == nil)
 

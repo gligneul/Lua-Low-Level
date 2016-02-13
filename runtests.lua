@@ -13,8 +13,10 @@ local TEST_SUFFIX = '.lua'
 
 -- Declaraion of test modules
 local modules = {
+    'api',
     'basic',
     'binop',
+-- TODO fix;    'closure',
     'for',
     'optest',
     'self',

@@ -10,7 +10,7 @@ local executetests = require 'tests/executetests'
 local generateargs = require 'tests/generateargs'
 
 do
-    local prefix = 'return function(a) if '
+    local prefix = 'function(a) if '
     local suffix = ' then return true else return false end end'
     local f1 = prefix .. 'a' .. suffix
     local f2 = prefix .. 'not a' .. suffix
@@ -18,7 +18,7 @@ do
 end
 
 do
-    local prefix = 'return function(a, b) return '
+    local prefix = 'function(a, b) return '
     local suffix = ' end'
     local f1 = prefix .. 'a or b' .. suffix
     local f2 = prefix .. 'a and b' .. suffix

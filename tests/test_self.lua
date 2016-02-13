@@ -6,11 +6,11 @@
 --
 -- test_self.lua
 
-local function get_(o) return o:getN() end
-local get = lll.compile(get_)
+local function get(o) return o:getN() end
+assert(lll.compile(get))
 
-local function set_(o, n) o:setN(n) end
-local set = lll.compile(set_);
+local function set(o, n) o:setN(n) end
+assert(lll.compile(set));
 
 local obj = {
     n = 10,

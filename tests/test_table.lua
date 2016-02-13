@@ -6,9 +6,12 @@
 --
 -- test_table.lua
 
-local create = lll.compile(function() return {} end)
-local get = lll.compile(function(t, k) return t[k] end)
-local set = lll.compile(function(t, k, v) t[k] = v end)
+local create = function() return {} end
+assert(lll.compile(create))
+local get = function(t, k) return t[k] end
+assert(lll.compile(get))
+local set = function(t, k, v) t[k] = v end
+assert(lll.compile(set))
 
 local t = create();
 assert(type(t) == 'table' and next(t) == nil)
@@ -22,8 +25,11 @@ assert(t[123] == 'test' and get(t, 123) == 'test')
 set(t, 'a', nil)
 assert(t.a == nil and get(t, 'a') == nil)
 
-local setk = lll.compile(function(t) t.k = 357 end)
-local getk = lll.compile(function(t) return t.k end)
+local setk = function(t) t.k = 357 end
+assert(lll.compile(setk))
+local getk = function(t) return t.k end
+assert(lll.compile(getk))
+
 setk(t)
 assert(t.k == 357 and getk(t) == 357)
 

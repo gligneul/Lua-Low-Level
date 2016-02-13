@@ -9,28 +9,29 @@
 local compare = require 'tests/compare'
 
 --- Verifies if results are the same
-local function verity_result(ok_lua, r_lua, ok_lll, r_lll)
-    if ok_lua or ok_lll then
-        return ok_lua == ok_lll and compare(r_lua, r_lll)
+local function verifyresult(oklua, retlua, oklll, retlll)
+    if oklua ~= oklll then
+        return false
+    elseif oklua then
+        return compare(retlua, retlll)
     else
         return true
-        -- TODO: fix error messages
-        -- return string.match(r_lua, r_lll) == r_lll
+        -- return string.match(retlua, retlll) == retlll
     end
 end
 
 --- Creates the error message
-local function error_msg(f, args, ok_lua, r_lua, ok_lll, r_lll)
+local function createerrmsg(f, args, retlua, retlll)
     local msg = 
         'test failed\n' ..
         'function: ' ..  f .. '\n' ..
         'args:    '
     for _, arg in ipairs(args) do
-        msg = msg .. ' ' .. arg
+        msg = msg .. ' ' .. tostring(arg)
     end
     msg = msg .. '\n' ..
-        'expected: ' .. tostring(r_lua) .. '\n' ..
-        'result:   ' .. tostring(r_lll) .. '\n'
+        'expected: ' .. tostring(retlua) .. '\n' ..
+        'result:   ' .. tostring(retlll) .. '\n'
     return msg
 end
 
@@ -45,21 +46,20 @@ end
 ---   args
 ---     List of arguments that will be passed to the functions
 return function(functions, arguments)
-    for _, f_str in ipairs(functions) do
-        -- Create Lua and LLL functions
-        local f_chunk, err = load(f_str)
-        if not f_chunk then
-            error('can\'t compile chunk: ' .. f_str .. '\nerror: ' .. err)
+    lll.setautocompile(false)
+    for _, fstr in ipairs(functions) do
+        local chunk, err = load('return ' .. fstr)
+        if not chunk then
+            error('can\'t compile chunk: ' .. fstr .. '\nerror: ' .. err)
         end
-        local f_lua = f_chunk()
-        local f_lll = lll.compile(f_lua)
-
-        -- Execute the functions
+        local flua = chunk()
+        local flll = chunk()
+        lll.compile(flll)
         for _, a in ipairs(arguments) do
-            local ok_lua, r_lua = pcall(f_lua, table.unpack(a))
-            local ok_lll, r_lll = pcall(f_lll, table.unpack(a))
-            if not verity_result(ok_lua, r_lua, ok_lll, r_lll) then
-                error(error_msg(f_str, a, ok_lua, r_lua, ok_lll, r_lll))
+            local oklua, retlua = pcall(flua, table.unpack(a))
+            local oklll, retlll = pcall(flll, table.unpack(a))
+            if not verifyresult(oklua, retlua, oklll, retlll) then
+                error(createerrmsg(fstr, a, retlua, retlll))
             end
         end
     end

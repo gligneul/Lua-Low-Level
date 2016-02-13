@@ -7,8 +7,11 @@
 -- test_upval.lua
 
 local a
-local get = lll.compile(function() return a end)
-local set = lll.compile(function(v) a = v end)
+
+local get = function() return a end
+assert(lll.compile(get))
+local set = function(v) a = v end
+assert(lll.compile(set))
 
 local function testupval(v)
     set(v)

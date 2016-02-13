@@ -45,6 +45,22 @@ static int lll_compile (lua_State *L) {
     }
 }
 
+static int lll_setautocompile (lua_State *L) {
+    luaL_checktype(L, 1, LUA_TBOOLEAN);
+    LLLSetAutoCompile(lua_toboolean(L, 1));
+    return 0;
+}
+
+static int lll_getautocompile (lua_State *L) {
+    lua_pushboolean(L, LLLGetAutoCompile());
+    return 1;
+}
+
+static int lll_iscompiled (lua_State *L) {
+    lua_pushboolean(L, LLLIsCompiled(getclosure(L)));
+    return 1;
+}
+
 static int lll_dump (lua_State *L) {
     (void)L;
     LLLDump(getclosure(L));
@@ -53,6 +69,9 @@ static int lll_dump (lua_State *L) {
 
 static const luaL_Reg lib_f[] = {
     {"compile", lll_compile},
+    {"setautocompile", lll_setautocompile},
+    {"getautocompile", lll_getautocompile},
+    {"iscompiled", lll_iscompiled},
     {"dump", lll_dump},
     {NULL, NULL}
 };
