@@ -87,16 +87,6 @@ void Compiler::CreateBlocks() {
     values_.ci = LoadField(values_.state, rt_->GetType("CallInfo"),
             offsetof(lua_State, ci), "ci");
 
-#if 0
-// TODO: create function for creating debug messages
-    auto printtype = llvm::FunctionType::get(llvm::Type::getVoidTy(context_),
-            {llvm::PointerType::get(MakeIntT(1), 0)}, true);
-    auto print = llvm::Function::Create(printtype,
-                llvm::Function::ExternalLinkage, "printf", module_.get());
-    auto printargs = {builder_.CreateGlobalStringPtr("jitted")};
-    builder_.CreateCall(print, printargs);
-#endif
-
     for (size_t i = 0; i < blocks_.size(); ++i) {
         auto instruction = luaP_opnames[GET_OPCODE(lclosure_->p->code[i])];
         std::stringstream name;
@@ -631,6 +621,19 @@ void Compiler::UpdateStack() {
 llvm::BasicBlock* Compiler::CreateSubBlock(const std::string& suffix) {
     return llvm::BasicBlock::Create(context_,
             blocks_[curr_]->getName() + suffix, function_, blocks_[curr_]);
+}
+
+void Compiler::DebugPrint(const std::string& message) {
+    auto function = module_->getFunction("printf");
+    if (!function) {
+        auto rettype = llvm::Type::getVoidTy(context_);
+        auto paramtype = llvm::PointerType::get(MakeIntT(1), 0);
+        auto functype = llvm::FunctionType::get(rettype, {paramtype}, true);
+        function = llvm::Function::Create(functype,
+                llvm::Function::ExternalLinkage, "printf", module_.get());
+    }
+    auto args = {builder_.CreateGlobalStringPtr(message + "\n")};
+    builder_.CreateCall(function, args);
 }
 
 }

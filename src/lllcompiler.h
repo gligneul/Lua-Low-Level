@@ -143,6 +143,9 @@ private:
     // Creates a sub-block with $suffix
     llvm::BasicBlock* CreateSubBlock(const std::string& suffix);
 
+    // Prints a message inside the jitted function
+    void DebugPrint(const std::string& message);
+
     LClosure* lclosure_;
     std::string error_;
     llvm::LLVMContext& context_;
