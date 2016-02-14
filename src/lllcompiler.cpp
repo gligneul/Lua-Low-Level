@@ -101,10 +101,7 @@ void Compiler::CompileInstructions() {
     for (curr_ = 0; curr_ < lclosure_->p->sizecode; ++curr_) {
         builder_.SetInsertPoint(blocks_[curr_]);
         instr_ = lclosure_->p->code[curr_];
-
-        values_.base = LoadField(values_.ci, rt_->GetType("TValue"),
-                ((uintptr_t)&(((CallInfo*)0)->u.l.base)), "base");
-
+        UpdateStack();
         switch(GET_OPCODE(instr_)) {
             case OP_MOVE:     CompileMove(); break;
             case OP_LOADK:    CompileLoadk(false); break;
@@ -476,26 +473,100 @@ void Compiler::CompileClosure() {
 }
 
 void Compiler::CompileVararg() {
-#if 0
-        int b = GETARG_B(instr_) - 1;
+    // TODO: Create a separate class/module
+    int a = GETARG_A(instr_);
+    int b = GETARG_B(instr_);
 
-        int b = GETARG_B(i) - 1;
+    // Create blocks
+    auto entryblock = blocks_[curr_];
+    auto movecheckblock = CreateSubBlock("movecheck");
+    auto moveblock = CreateSubBlock("move", movecheckblock);
+    auto fillcheckblock = CreateSubBlock("fillcheck", moveblock);
+    auto fillblock = CreateSubBlock("fill", fillcheckblock);
+    auto endblock = blocks_[curr_ + 1];
+
+    // Compute 'n' (available arguments)
+    auto func = LoadField(values_.ci, rt_->GetType("TValue"),
+            offsetof(CallInfo, func), "func");
+    auto vadiff = builder_.CreatePtrDiff(values_.base, func, "vadiff");
+    auto vasize = builder_.CreateIntCast(vadiff, MakeIntT(sizeof(int)), false,
+            "vasize");
+    auto n = builder_.CreateSub(vasize, MakeInt(lclosure_->p->numparams + 1),
+            "n");
+
+    // if n < 0 then n = 0 end
+    auto nge0 = builder_.CreateICmpSGE(n, MakeInt(0), "n.ge.0");
+    auto nge0int = builder_.CreateIntCast(nge0, MakeIntT(sizeof(int)), false,
+            "n.ge.0_int");
+    auto available = builder_.CreateMul(nge0int, n, "available");
+
+    // Compute 'b' (required arguments)
+    auto required = MakeInt(b - 1);
+    if (b == 0) {
+        required = available;
+        CreateCall("lll_checkstack", {values_.state, available});
+        UpdateStack();
+        auto topidx = builder_.CreateAdd(MakeInt(a), n, "topidx");
+        auto top = builder_.CreateGEP(values_.base, topidx, "top");
+        SetField(values_.state, top, offsetof(lua_State, top), "top");
+    }
+    builder_.CreateBr(movecheckblock);
+
+    // movecheckblock
+    builder_.SetInsertPoint(movecheckblock);
+    auto i = builder_.CreatePHI(MakeIntT(sizeof(int)), 2, "i");
+    i->addIncoming(MakeInt(0), entryblock);
+    i->addIncoming(builder_.CreateAdd(i, MakeInt(1)), moveblock);
+    // TODO: Compare with the smallest value only
+    auto iltrequired = builder_.CreateICmpSLT(i, required, "i.lt.required");
+    auto iltavailable = builder_.CreateICmpSLT(i, available, "i.lt.available");
+    auto cond = builder_.CreateAnd(iltrequired, iltavailable);
+    builder_.CreateCondBr(cond, moveblock, fillcheckblock);
+
+    // moveblock
+    {
+    builder_.SetInsertPoint(moveblock);
+    auto validx = builder_.CreateSub(i, available, "validx");
+    auto val = builder_.CreateGEP(values_.base, validx, "val");
+    auto regidx = builder_.CreateAdd(MakeInt(a), i, "regidx");
+    auto reg = builder_.CreateGEP(values_.base, regidx, "reg");
+    SetRegister(reg, val);
+    builder_.CreateBr(movecheckblock);
+    }
+
+    // fillcheckblock
+    builder_.SetInsertPoint(fillcheckblock);
+    auto j = builder_.CreatePHI(MakeIntT(sizeof(int)), 2, "j");
+    j->addIncoming(i, movecheckblock);
+    j->addIncoming(builder_.CreateAdd(j, MakeInt(1)), fillblock);
+    auto jltrequired = builder_.CreateICmpSLT(j, required, "j.lt.required");
+    builder_.CreateCondBr(jltrequired, fillblock, endblock);
+
+    // fillblock
+    {
+    builder_.SetInsertPoint(fillblock);
+    auto regidx = builder_.CreateAdd(MakeInt(a), j, "regidx");
+    auto reg = builder_.CreateGEP(values_.base, regidx, "reg");
+    SetField(reg, MakeInt(LUA_TNIL), offsetof(TValue, tt_), "tag");
+    builder_.CreateBr(fillcheckblock);
+    }
+#if 0
+        int b = GETARG_B(i) - 1;  /* required results */
         int j;
         int n = cast_int(base - ci->func) - cl->p->numparams - 1;
+        if (n < 0)  /* less arguments than parameters? */
+          n = 0;  /* no vararg arguments */
         if (b < 0) {  /* B == 0? */
           b = n;  /* get all var. arguments */
           Protect(luaD_checkstack(L, n));
           ra = RA(i);  /* previous call may change the stack */
           L->top = ra + n;
         }
-        for (j = 0; j < b; j++) {
-          if (j < n) {
-            setobjs2s(L, ra + j, base - n + j);
-          }
-          else {
-            setnilvalue(ra + j);
-          }
-        }
+        for (j = 0; j < b && j < n; j++)
+          setobjs2s(L, ra + j, base - n + j);
+        for (; j < b; j++)  /* complete required results with nil */
+          setnilvalue(ra + j);
+        vmbreak;
 #endif
 }
 
@@ -572,6 +643,11 @@ void Compiler::SetRegister(llvm::Value* reg, llvm::Value* value) {
     builder_.CreateStore(value_mem, reg_memptr);
 }
 
+void Compiler::UpdateStack() {
+    values_.base = LoadField(values_.ci, rt_->GetType("TValue"),
+            ((uintptr_t)&(((CallInfo*)0)->u.l.base)), "base");
+}
+
 void Compiler::ReloadTop() {
     auto top = LoadField(values_.ci, rt_->GetType("TValue"),
             offsetof(CallInfo, top), "top");
@@ -591,9 +667,12 @@ llvm::Value* Compiler::TopDiff(int n) {
     return builder_.CreateIntCast(diff, MakeIntT(sizeof(int)), false, "idiff");
 }
 
-llvm::BasicBlock* Compiler::CreateSubBlock(const std::string& suffix) {
-    return llvm::BasicBlock::Create(context_,
-            blocks_[curr_]->getName() + suffix, function_, blocks_[curr_]);
+llvm::BasicBlock* Compiler::CreateSubBlock(const std::string& suffix,
+            llvm::BasicBlock* preview) {
+    if (!preview)
+        preview = blocks_[curr_];
+    auto name = blocks_[curr_]->getName() + suffix;
+    return llvm::BasicBlock::Create(context_, name, function_, preview);
 }
 
 void Compiler::DebugPrint(const std::string& message) {

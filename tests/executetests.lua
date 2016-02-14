@@ -35,6 +35,16 @@ local function createerrmsg(f, args, retlua, retlll)
     return msg
 end
 
+--- Convert a list of string to a list of values
+local function tovalues(l)
+    local lstr = '{'
+    for _, v in ipairs(l) do
+        lstr = lstr .. v .. ','
+    end
+    lstr = lstr .. '}'
+    return load('return ' .. lstr)()
+end
+
 --- Description
 ---   Compile the functions and run both Lua and LLL versions of it.
 ---   Then compare if the results are the same.
@@ -47,6 +57,8 @@ end
 ---     List of arguments that will be passed to the functions
 return function(functions, arguments)
     lll.setautocompile(false)
+    local nf = 0
+    local nc = 0
     for _, fstr in ipairs(functions) do
         local chunk, err = load('return ' .. fstr)
         if not chunk then
@@ -55,13 +67,17 @@ return function(functions, arguments)
         local flua = chunk()
         local flll = chunk()
         lll.compile(flll)
-        for _, a in ipairs(arguments) do
+        for _, astr in ipairs(arguments) do
+            local a = tovalues(astr)
             local oklua, retlua = pcall(flua, table.unpack(a))
             local oklll, retlll = pcall(flll, table.unpack(a))
             if not verifyresult(oklua, retlua, oklll, retlll) then
                 error(createerrmsg(fstr, a, retlua, retlll))
             end
+            nc = nc + 1
         end
+        nf = nf + 1
     end
+    print("\tfunctions: " .. nf .. " --- calls: " .. nc)
 end
 

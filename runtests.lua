@@ -25,6 +25,7 @@ local modules = {
     'tabup',
     'unop',
     'upval',
+    'vararg',
 }
 
 -- Execute the tests

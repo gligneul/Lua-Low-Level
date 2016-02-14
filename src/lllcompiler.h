@@ -128,6 +128,9 @@ private:
     // Sets a register with a value
     void SetRegister(llvm::Value* reg, llvm::Value* value);
 
+    // Updates base value
+    void UpdateStack();
+
     // Sets L->top = ci->top
     void ReloadTop();
 
@@ -138,7 +141,8 @@ private:
     llvm::Value* TopDiff(int n);
 
     // Creates a sub-block with $suffix
-    llvm::BasicBlock* CreateSubBlock(const std::string& suffix);
+    llvm::BasicBlock* CreateSubBlock(const std::string& suffix,
+            llvm::BasicBlock* preview = nullptr);
 
     // Prints a message inside the jitted function
     void DebugPrint(const std::string& message);

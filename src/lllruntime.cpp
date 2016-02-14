@@ -366,6 +366,10 @@ static void lll_closure(lua_State* L, LClosure* cl, TValue* base, TValue* ra,
         setclLvalue(L, ra, ncl);  /* push cashed closure */
 }
 
+static void lll_checkstack(lua_State* L, int n) {
+    luaD_checkstack(L, n);
+}
+
 namespace lll {
 
 Runtime* Runtime::instance_ = nullptr;
@@ -460,6 +464,7 @@ void Runtime::InitFunctions() {
     ADDFUNCTION(lll_forprep, tvoid, tstate, tvalue);
     ADDFUNCTION(lll_setlist, tvoid, tstate, tvalue, tint, tint);
     ADDFUNCTION(lll_closure, tvoid, tstate, tclosure, tvalue, tvalue, tint);
+    ADDFUNCTION(lll_checkstack, tvoid, tstate, tint);
     ADDFUNCTION(luaH_resize, tvoid, tstate, ttable, tint, tint);
     LOADUNOP(luaV_objlen);
     ADDFUNCTION(luaV_concat, tvoid, tstate, tint);
