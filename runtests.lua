@@ -16,7 +16,7 @@ local modules = {
     'api',
     'basic',
     'binop',
--- TODO fix;    'closure',
+    'closure',
     'for',
     'optest',
     'self',

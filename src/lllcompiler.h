@@ -137,9 +137,6 @@ private:
     // Returns the ptrdiff from R(n) to top
     llvm::Value* TopDiff(int n);
 
-    // Updates the func variable; should be called before getting a register
-    void UpdateStack();
-
     // Creates a sub-block with $suffix
     llvm::BasicBlock* CreateSubBlock(const std::string& suffix);
 
@@ -160,7 +157,7 @@ private:
         llvm::Value* closure;
         llvm::Value* ci;
         llvm::Value* k;
-        llvm::Value* func;
+        llvm::Value* base;
     } values_;
     int curr_;
     Instruction instr_;

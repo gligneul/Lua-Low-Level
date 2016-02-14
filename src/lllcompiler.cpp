@@ -101,6 +101,10 @@ void Compiler::CompileInstructions() {
     for (curr_ = 0; curr_ < lclosure_->p->sizecode; ++curr_) {
         builder_.SetInsertPoint(blocks_[curr_]);
         instr_ = lclosure_->p->code[curr_];
+
+        values_.base = LoadField(values_.ci, rt_->GetType("TValue"),
+                ((uintptr_t)&(((CallInfo*)0)->u.l.base)), "base");
+
         switch(GET_OPCODE(instr_)) {
             case OP_MOVE:     CompileMove(); break;
             case OP_LOADK:    CompileLoadk(false); break;
@@ -181,14 +185,12 @@ bool Compiler::CreateEngine() {
 }
 
 void Compiler::CompileMove() {
-    UpdateStack();
     auto ra = GetValueR(GETARG_A(instr_), "ra");
     auto rb = GetValueR(GETARG_B(instr_), "rb");
     SetRegister(ra, rb);
 }
 
 void Compiler::CompileLoadk(bool extraarg) {
-    UpdateStack();
     int kposition = extraarg ? GETARG_Ax(lclosure_->p->code[curr_ + 1])
                              : GETARG_Bx(instr_);
     auto ra = GetValueR(GETARG_A(instr_), "ra");
@@ -197,7 +199,6 @@ void Compiler::CompileLoadk(bool extraarg) {
 }
 
 void Compiler::CompileLoadbool() {
-    UpdateStack();
     auto ra = GetValueR(GETARG_A(instr_), "ra");
     SetField(ra, MakeInt(GETARG_B(instr_)), offsetof(TValue, value_), "value");
     SetField(ra, MakeInt(LUA_TBOOLEAN), offsetof(TValue, tt_), "tag");
@@ -206,7 +207,6 @@ void Compiler::CompileLoadbool() {
 }
 
 void Compiler::CompileLoadnil() {
-    UpdateStack();
     int start = GETARG_A(instr_);
     int end = start + GETARG_B(instr_);
     for (int i = start; i <= end; ++i) {
@@ -216,14 +216,12 @@ void Compiler::CompileLoadnil() {
 }
 
 void Compiler::CompileGetupval() {
-    UpdateStack();
     auto ra = GetValueR(GETARG_A(instr_), "ra");
     auto upval = GetUpval(GETARG_B(instr_));
     SetRegister(ra, upval);
 }
 
 void Compiler::CompileGettabup() {
-    UpdateStack();
     auto args = {
         values_.state,
         GetUpval(GETARG_B(instr_)),
@@ -234,7 +232,6 @@ void Compiler::CompileGettabup() {
 }
 
 void Compiler::CompileGettable() {
-    UpdateStack();
     auto args = {
         values_.state,
         GetValueR(GETARG_B(instr_), "rb"),
@@ -245,7 +242,6 @@ void Compiler::CompileGettable() {
 }
 
 void Compiler::CompileSettabup() {
-    UpdateStack();
     auto args = {
         values_.state,
         GetUpval(GETARG_A(instr_)), 
@@ -256,7 +252,6 @@ void Compiler::CompileSettabup() {
 }
 
 void Compiler::CompileSetupval() {
-    UpdateStack();
     auto upvals = LoadField(values_.closure, rt_->GetType("UpVal"),
             offsetof(LClosure, upvals), "upvals");
     auto upval = builder_.CreateGEP(upvals, MakeInt(GETARG_B(instr_)), "upval");
@@ -268,7 +263,6 @@ void Compiler::CompileSetupval() {
 }
 
 void Compiler::CompileSettable() {
-    UpdateStack();
     auto args = {
         values_.state,
         GetValueR(GETARG_A(instr_), "ra"),
@@ -279,7 +273,6 @@ void Compiler::CompileSettable() {
 }
 
 void Compiler::CompileNewtable() {
-    UpdateStack();
     int a = GETARG_A(instr_);
     int b = GETARG_B(instr_);
     int c = GETARG_C(instr_);
@@ -298,7 +291,6 @@ void Compiler::CompileNewtable() {
 }
 
 void Compiler::CompileSelf() {
-    UpdateStack();
     auto args = {
         values_.state,
         GetValueR(GETARG_A(instr_), "ra"),
@@ -309,7 +301,6 @@ void Compiler::CompileSelf() {
 }
 
 void Compiler::CompileBinop(const std::string& function) {
-    UpdateStack();
     auto args = {
         values_.state,
         GetValueR(GETARG_A(instr_), "ra"),
@@ -320,7 +311,6 @@ void Compiler::CompileBinop(const std::string& function) {
 }
 
 void Compiler::CompileUnop(const std::string& function) {
-    UpdateStack();
     auto args = {
         values_.state,
         GetValueR(GETARG_A(instr_), "ra"),
@@ -330,7 +320,6 @@ void Compiler::CompileUnop(const std::string& function) {
 }
 
 void Compiler::CompileConcat() {
-    UpdateStack();
     int a = GETARG_A(instr_);
     int b = GETARG_B(instr_);
     int c = GETARG_C(instr_);
@@ -338,7 +327,6 @@ void Compiler::CompileConcat() {
     auto args = {values_.state, MakeInt(c - b + 1)};
     CreateCall("luaV_concat", args);
 
-    UpdateStack();
     auto ra = GetValueR(a, "ra");
     auto rb = GetValueR(b, "rb");
     SetRegister(ra, rb);
@@ -356,7 +344,6 @@ void Compiler::CompileJmp() {
 }
 
 void Compiler::CompileCmp(const std::string& function) {
-    UpdateStack();
     auto args = {
         values_.state,
         GetValueRK(GETARG_B(instr_), "rkb"),
@@ -369,14 +356,12 @@ void Compiler::CompileCmp(const std::string& function) {
 }
 
 void Compiler::CompileTest() {
-    UpdateStack();
     auto args = {MakeInt(GETARG_C(instr_)), GetValueR(GETARG_A(instr_), "ra")};
     auto result = ToBool(CreateCall("lll_test", args, "result"));
     builder_.CreateCondBr(result, blocks_[curr_ + 2], blocks_[curr_ + 1]);
 }
 
 void Compiler::CompileTestset() {
-    UpdateStack();
     auto rb = GetValueR(GETARG_B(instr_), "rb");
     auto args = {MakeInt(GETARG_C(instr_)), rb};
     auto result = ToBool(CreateCall("lll_test", args, "result"));
@@ -389,7 +374,6 @@ void Compiler::CompileTestset() {
 }
 
 void Compiler::CompileCall() {
-    UpdateStack();
     int a = GETARG_A(instr_);
     int b = GETARG_B(instr_);
     if (b != 0)
@@ -403,8 +387,8 @@ void Compiler::CompileCall() {
 }
 
 void Compiler::CompileReturn() {
-    UpdateStack();
-        //if (cl->p->sizep > 0) luaF_close(L, base);
+    if (lclosure_->p->sizep > 0)
+        CreateCall("luaF_close", {values_.state, values_.base});
     int a = GETARG_A(instr_);
     int b = GETARG_B(instr_);
     llvm::Value* nresults = nullptr;
@@ -420,7 +404,6 @@ void Compiler::CompileReturn() {
 }
 
 void Compiler::CompileForloop() {
-    UpdateStack();
     auto ra = GetValueR(GETARG_A(instr_), "ra");
     auto jump = ToBool(CreateCall("lll_forloop", {ra}, "jump"));
     auto jumpblock = blocks_[curr_ + 1 + GETARG_sBx(instr_)];
@@ -428,14 +411,12 @@ void Compiler::CompileForloop() {
 }
 
 void Compiler::CompileForprep() {
-    UpdateStack();
     auto args = {values_.state, GetValueR(GETARG_A(instr_), "ra")};
     CreateCall("lll_forprep", args);
     builder_.CreateBr(blocks_[curr_ + 1 + GETARG_sBx(instr_)]);
 }
 
 void Compiler::CompileTforcall() {
-    UpdateStack();
     int a = GETARG_A(instr_);
     int cb = a + 3;
     SetRegister(GetValueR(cb + 2, "cb2"), GetValueR(a + 2, "ra2"));
@@ -452,7 +433,6 @@ void Compiler::CompileTforcall() {
 }
 
 void Compiler::CompileTforloop() {
-    UpdateStack();
     int a = GETARG_A(instr_);
     auto ra1 = GetValueR(a + 1, "ra1");
     auto tag = LoadField(ra1, MakeIntT(sizeof(int)), offsetof(TValue, tt_),
@@ -468,7 +448,6 @@ void Compiler::CompileTforloop() {
 }
 
 void Compiler::CompileSetlist() {
-    UpdateStack();
 
     int a = GETARG_A(instr_);
     int b = GETARG_B(instr_);
@@ -485,11 +464,10 @@ void Compiler::CompileSetlist() {
 }
 
 void Compiler::CompileClosure() {
-    UpdateStack();
     auto args = {
         values_.state,
         values_.closure,
-        GetValueR(0, "base"),
+        values_.base,
         GetValueR(GETARG_A(instr_), "ra"),
         MakeInt(GETARG_Bx(instr_))
     };
@@ -560,7 +538,7 @@ void Compiler::SetField(llvm::Value* strukt, llvm::Value* fieldvalue,
 }
 
 llvm::Value* Compiler::GetValueR(int arg, const std::string& name) {
-    return builder_.CreateGEP(values_.func, MakeInt(1 + arg), name);
+    return builder_.CreateGEP(values_.base, MakeInt(arg), name);
 }
 
 llvm::Value* Compiler::GetValueK(int arg, const std::string& name) {
@@ -611,11 +589,6 @@ llvm::Value* Compiler::TopDiff(int n) {
     auto r = GetValueR(n, "r");
     auto diff = builder_.CreatePtrDiff(top, r, "diff");
     return builder_.CreateIntCast(diff, MakeIntT(sizeof(int)), false, "idiff");
-}
-
-void Compiler::UpdateStack() {
-    values_.func = LoadField(values_.ci, rt_->GetType("TValue"),
-            offsetof(CallInfo, func), "func");
 }
 
 llvm::BasicBlock* Compiler::CreateSubBlock(const std::string& suffix) {
