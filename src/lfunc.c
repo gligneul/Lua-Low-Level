@@ -19,6 +19,7 @@
 #include "lmem.h"
 #include "lobject.h"
 #include "lstate.h"
+#include "lllcore.h"
 
 
 
@@ -34,9 +35,6 @@ LClosure *luaF_newLclosure (lua_State *L, int n) {
   GCObject *o = luaC_newobj(L, LUA_TLCL, sizeLclosure(n));
   LClosure *c = gco2lcl(o);
   c->p = NULL;
-  c->ncalls = 0;
-  c->lllfunction = NULL;
-  c->llldata = NULL;
   c->nupvalues = cast_byte(n);
   while (n--) c->upvals[n] = NULL;
   return c;
@@ -121,6 +119,9 @@ Proto *luaF_newproto (lua_State *L) {
   f->linedefined = 0;
   f->lastlinedefined = 0;
   f->source = NULL;
+  f->ncalls = 0;
+  f->lllfunction = NULL;
+  f->llldata = NULL;
   return f;
 }
 
@@ -132,6 +133,7 @@ void luaF_freeproto (lua_State *L, Proto *f) {
   luaM_freearray(L, f->lineinfo, f->sizelineinfo);
   luaM_freearray(L, f->locvars, f->sizelocvars);
   luaM_freearray(L, f->upvalues, f->sizeupvalues);
+  LLLFreeEngine(L, f);
   luaM_free(L, f);
 }
 

@@ -40,10 +40,13 @@
 #define LLL_CALLS_TO_COMPILE 50
 #endif
 
-/* Compiles a function and attachs it to the closure
+/* Compiles a function and attachs it to the proto
 ** In success returns 0, else returns 1
 ** If errmsg != NULL also returns the error message (must be freed) */
-int LLLCompile (lua_State *L, LClosure *cl, char **errmsg);
+int LLLCompile (lua_State *L, Proto *p, char **errmsg);
+
+/* Also compiles all children functions */
+int LLLCompileAll (lua_State *L, Proto *p, char **errmsg);
 
 /* Enables or disables the auto compilation */
 void LLLSetAutoCompile (int autocompile);
@@ -52,13 +55,13 @@ void LLLSetAutoCompile (int autocompile);
 int LLLGetAutoCompile();
 
 /* Returns whether the function is compiled */
-int LLLIsCompiled (LClosure *cl);
+int LLLIsCompiled (Proto *p);
 
 /* Destroys the engine */
-void LLLFreeEngine (lua_State *L, LClosure *cl);
+void LLLFreeEngine (lua_State *L, Proto *p);
 
 /* Dumps the LLMV function (debug) */
-void LLLDump (LClosure *cl);
+void LLLDump (Proto *p);
 
 #endif
 

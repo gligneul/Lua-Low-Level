@@ -402,6 +402,14 @@ typedef struct LocVar {
 
 
 /*
+** LLL Compiled function type
+** Returns the number of results
+*/
+struct LClosure;
+typedef int (*LLLFunction) (lua_State *, struct LClosure *);
+
+
+/*
 ** Function Prototypes
 */
 typedef struct Proto {
@@ -426,6 +434,9 @@ typedef struct Proto {
   struct LClosure *cache;  /* last-created closure with this prototype */
   TString  *source;  /* used for debug information */
   GCObject *gclist;
+  int ncalls;
+  LLLFunction lllfunction;
+  void *llldata;
 } Proto;
 
 
@@ -434,16 +445,6 @@ typedef struct Proto {
 ** Lua Upvalues
 */
 typedef struct UpVal UpVal;
-
-
-
-/*
-** LLL Types
-*/
-
-/* Compiled function type
-** Returns the number of results */
-typedef int (*LLLFunction) (lua_State *, struct LClosure *);
 
 
 
@@ -464,9 +465,6 @@ typedef struct CClosure {
 typedef struct LClosure {
   ClosureHeader;
   struct Proto *p;
-  int ncalls;
-  LLLFunction lllfunction;
-  void *llldata;
   UpVal *upvals[1];  /* list of upvalues */
 } LClosure;
 

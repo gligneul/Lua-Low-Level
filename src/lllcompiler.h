@@ -23,7 +23,7 @@ extern "C" {
 }
 
 struct lua_State;
-struct LClosure;
+struct Proto;
 
 namespace lll {
 
@@ -32,7 +32,7 @@ class Runtime;
 
 class Compiler {
 public:
-    Compiler(LClosure* lclosure);
+    Compiler(Proto* proto);
 
     // Starts the function compilation
     // Returns false if it fails
@@ -147,7 +147,7 @@ private:
     // Prints a message inside the jitted function
     void DebugPrint(const std::string& message);
 
-    LClosure* lclosure_;
+    Proto* proto_;
     std::string error_;
     llvm::LLVMContext& context_;
     Runtime* rt_;

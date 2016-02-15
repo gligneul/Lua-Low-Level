@@ -34,14 +34,14 @@ extern "C" {
 
 namespace lll {
 
-Compiler::Compiler(LClosure* lclosure) :
-    lclosure_(lclosure),
+Compiler::Compiler(Proto* proto) :
+    proto_(proto),
     context_(llvm::getGlobalContext()),
     rt_(Runtime::Instance()),
     engine_(nullptr),
     module_(new llvm::Module("lll_module", context_)),
     function_(CreateMainFunction()),
-    blocks_(lclosure->p->sizecode, nullptr),
+    blocks_(proto_->sizecode, nullptr),
     builder_(context_),
     curr_(0) {
     static bool init = true;
@@ -88,7 +88,7 @@ void Compiler::CreateBlocks() {
             offsetof(lua_State, ci), "ci");
 
     for (size_t i = 0; i < blocks_.size(); ++i) {
-        auto instruction = luaP_opnames[GET_OPCODE(lclosure_->p->code[i])];
+        auto instruction = luaP_opnames[GET_OPCODE(proto_->code[i])];
         std::stringstream name;
         name << "block." << i << "." << instruction;
         blocks_[i] = llvm::BasicBlock::Create(context_, name.str(), function_);
@@ -98,9 +98,9 @@ void Compiler::CreateBlocks() {
 }
 
 void Compiler::CompileInstructions() {
-    for (curr_ = 0; curr_ < lclosure_->p->sizecode; ++curr_) {
+    for (curr_ = 0; curr_ < proto_->sizecode; ++curr_) {
         builder_.SetInsertPoint(blocks_[curr_]);
-        instr_ = lclosure_->p->code[curr_];
+        instr_ = proto_->code[curr_];
         UpdateStack();
         switch(GET_OPCODE(instr_)) {
             case OP_MOVE:     CompileMove(); break;
@@ -188,7 +188,7 @@ void Compiler::CompileMove() {
 }
 
 void Compiler::CompileLoadk(bool extraarg) {
-    int kposition = extraarg ? GETARG_Ax(lclosure_->p->code[curr_ + 1])
+    int kposition = extraarg ? GETARG_Ax(proto_->code[curr_ + 1])
                              : GETARG_Bx(instr_);
     auto ra = GetValueR(GETARG_A(instr_), "ra");
     auto k = GetValueK(kposition, "k");
@@ -384,7 +384,7 @@ void Compiler::CompileCall() {
 }
 
 void Compiler::CompileReturn() {
-    if (lclosure_->p->sizep > 0)
+    if (proto_->sizep > 0)
         CreateCall("luaF_close", {values_.state, values_.base});
     int a = GETARG_A(instr_);
     int b = GETARG_B(instr_);
@@ -450,7 +450,7 @@ void Compiler::CompileSetlist() {
     int b = GETARG_B(instr_);
     int c = GETARG_C(instr_);
     if (c == 0)
-        c = GETARG_Ax(lclosure_->p->code[curr_ + 1]);
+        c = GETARG_Ax(proto_->code[curr_ + 1]);
 
     auto n = (b != 0 ? MakeInt(b) : TopDiff(a + 1));
     auto fields = MakeInt((c - 1) * LFIELDS_PER_FLUSH);
@@ -491,7 +491,7 @@ void Compiler::CompileVararg() {
     auto vadiff = builder_.CreatePtrDiff(values_.base, func, "vadiff");
     auto vasize = builder_.CreateIntCast(vadiff, MakeIntT(sizeof(int)), false,
             "vasize");
-    auto n = builder_.CreateSub(vasize, MakeInt(lclosure_->p->numparams + 1),
+    auto n = builder_.CreateSub(vasize, MakeInt(proto_->numparams + 1),
             "n");
 
     // if n < 0 then n = 0 end
@@ -613,7 +613,7 @@ llvm::Value* Compiler::GetValueR(int arg, const std::string& name) {
 }
 
 llvm::Value* Compiler::GetValueK(int arg, const std::string& name) {
-    auto k = lclosure_->p->k + arg;
+    auto k = proto_->k + arg;
     auto intptr = llvm::ConstantInt::get(MakeIntT(sizeof(void*)), (uintptr_t)k);
     return builder_.CreateIntToPtr(intptr, rt_->GetType("TValue"), name);
 }

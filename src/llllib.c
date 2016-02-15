@@ -34,7 +34,7 @@ static LClosure *getclosure (lua_State *L) {
 
 static int lll_compile (lua_State *L) {
     char *errmsg = NULL;
-    int err = LLLCompile(L, getclosure(L), &errmsg);
+    int err = LLLCompileAll(L, getclosure(L)->p, &errmsg);
     lua_pushboolean(L, !err);
     if (err) {
         lua_pushstring(L, errmsg);
@@ -57,13 +57,13 @@ static int lll_getautocompile (lua_State *L) {
 }
 
 static int lll_iscompiled (lua_State *L) {
-    lua_pushboolean(L, LLLIsCompiled(getclosure(L)));
+    lua_pushboolean(L, LLLIsCompiled(getclosure(L)->p));
     return 1;
 }
 
 static int lll_dump (lua_State *L) {
     (void)L;
-    LLLDump(getclosure(L));
+    LLLDump(getclosure(L)->p);
     return 0;
 }
 

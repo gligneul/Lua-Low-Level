@@ -22,11 +22,11 @@ extern "C" {
 #include "lllcore.h"
 }
 
-#define GETENGINE(cl) static_cast<lll::Engine *>(cl->llldata)
-#define SETENGINE(cl, e) { \
+#define GETENGINE(p) static_cast<lll::Engine *>(p->llldata)
+#define SETENGINE(p, e) { \
     auto engine = e; \
-    cl->llldata = engine; \
-    cl->lllfunction = reinterpret_cast<LLLFunction>(engine->GetFunction()); }
+    p->llldata = engine; \
+    p->lllfunction = reinterpret_cast<LLLFunction>(engine->GetFunction()); }
 
 static int autocompile_ = 1;
 
@@ -37,19 +37,28 @@ void writeerror (lua_State *L, char **outerr, const char *err) {
     }
 }
 
-int LLLCompile (lua_State *L, LClosure *cl, char **errmsg) {
-    if (GETENGINE(cl) != NULL) {
+int LLLCompile (lua_State *L, Proto *p, char **errmsg) {
+    if (GETENGINE(p) != NULL) {
         writeerror(L, errmsg, "Function already compiled");
         return 1;
     }
 
-    lll::Compiler compiler(cl);
+    lll::Compiler compiler(p);
     if (!compiler.Compile()) {
         writeerror(L, errmsg, compiler.GetErrorMessage().c_str());
         return 1;
     }
 
-    SETENGINE(cl, compiler.GetEngine());
+    SETENGINE(p, compiler.GetEngine());
+    return 0;
+}
+
+int LLLCompileAll (lua_State *L, Proto *p, char **errmsg) {
+    if (LLLCompile(L, p, errmsg))
+        return 1;
+    for (int i = 0; i < p->sizep; ++i)
+        if (LLLCompileAll(L, p->p[i], errmsg))
+            return 1;
     return 0;
 }
 
@@ -61,16 +70,16 @@ int LLLGetAutoCompile() {
     return autocompile_;
 }
 
-int LLLIsCompiled (LClosure *cl) {
-    return GETENGINE(cl) != NULL;
+int LLLIsCompiled (Proto *p) {
+    return GETENGINE(p) != NULL;
 }
 
-void LLLFreeEngine (lua_State *L, LClosure *cl) {
+void LLLFreeEngine (lua_State *L, Proto *p) {
     (void)L;
-    delete GETENGINE(cl);
+    delete GETENGINE(p);
 }
 
-void LLLDump (LClosure *cl) {
-    GETENGINE(cl)->Dump();
+void LLLDump (Proto *p) {
+    GETENGINE(p)->Dump();
 }
 
