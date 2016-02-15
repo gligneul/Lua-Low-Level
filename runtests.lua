@@ -4,8 +4,8 @@
 -- Author: Gabriel de Quadros Ligneul
 -- Copyright Notice for LLL: see lllvmjit.h
 --
--- run_tests.lua
--- Executes each test module
+-- runtests.lua
+-- Execute each test module
 
 -- Configuration constants
 local TEST_PREFIX = 'tests/test_'
