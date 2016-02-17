@@ -5,9 +5,11 @@
 --
 -- matmul.lua
 
-local SIZE = 100
+local benchmark_util = require 'benchmarks/util'
 
-return function()
+benchmark_util(function()
+    local SIZE = 250
+
     -- Create the matrices
     local A = {}
     local B = {}
@@ -33,4 +35,4 @@ return function()
             C[i][j] = val
         end
     end
-end
+end)
