@@ -13,6 +13,7 @@
 #include <vector>
 #include <string>
 
+#include <llvm/ExecutionEngine/ExecutionEngine.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
@@ -32,6 +33,9 @@ class Runtime;
 
 class Compiler {
 public:
+    static const llvm::CodeGenOpt::Level OPT_LEVEL = llvm::CodeGenOpt::None;
+
+    // Constructor, receiver the proto that will be compiled
     Compiler(Proto* proto);
 
     // Starts the function compilation
@@ -145,7 +149,19 @@ private:
             llvm::BasicBlock* preview = nullptr);
 
     // Prints a message inside the jitted function
-    void DebugPrint(const std::string& message);
+    template<typename... Arguments>
+    void DebugPrint(const std::string& format, Arguments... args) {
+        auto function = module_->getFunction("printf");
+        if (!function) {
+            auto rettype = llvm::Type::getVoidTy(context_);
+            auto paramtype = llvm::PointerType::get(MakeIntT(1), 0);
+            auto functype = llvm::FunctionType::get(rettype, {paramtype}, true);
+            function = llvm::Function::Create(functype,
+                    llvm::Function::ExternalLinkage, "printf", module_.get());
+        }
+        auto callargs = {builder_.CreateGlobalStringPtr(format+ "\n"), args...};
+        builder_.CreateCall(function, callargs);
+    }
 
     Proto* proto_;
     std::string error_;

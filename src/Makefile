@@ -29,7 +29,7 @@ SYSCXXFLAGS=
 SYSLDFLAGS=
 SYSLIBS=
 
-MYCFLAGS= `llvm-config --cflags | sed -e 's/-DNDEBUG//'`
+MYCFLAGS= `llvm-config --cflags | sed -e 's/-DNDEBUG//' -e 's/-O.//'`
 MYCXXFLAGS= $(MYCFLAGS)
 MYLDFLAGS= `llvm-config --ldflags`
 MYLIBS= `llvm-config --libs all --system-libs`

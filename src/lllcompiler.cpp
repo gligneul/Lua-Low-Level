@@ -11,7 +11,6 @@
 #include <sstream>
 
 #include <llvm/ADT/StringRef.h>
-#include <llvm/ExecutionEngine/ExecutionEngine.h>
 #include <llvm/ExecutionEngine/MCJIT.h>
 #include <llvm/IR/Constant.h>
 #include <llvm/IR/Verifier.h>
@@ -168,7 +167,7 @@ bool Compiler::CreateEngine() {
     auto module = module_.get();
     auto engine = llvm::EngineBuilder(module_.release())
             .setErrorStr(&error_)
-            .setOptLevel(llvm::CodeGenOpt::None)
+            .setOptLevel(OPT_LEVEL)
             .setEngineKind(llvm::EngineKind::JIT)
             .setUseMCJIT(true)
             .create();
@@ -550,24 +549,6 @@ void Compiler::CompileVararg() {
     SetField(reg, MakeInt(LUA_TNIL), offsetof(TValue, tt_), "tag");
     builder_.CreateBr(fillcheckblock);
     }
-#if 0
-        int b = GETARG_B(i) - 1;  /* required results */
-        int j;
-        int n = cast_int(base - ci->func) - cl->p->numparams - 1;
-        if (n < 0)  /* less arguments than parameters? */
-          n = 0;  /* no vararg arguments */
-        if (b < 0) {  /* B == 0? */
-          b = n;  /* get all var. arguments */
-          Protect(luaD_checkstack(L, n));
-          ra = RA(i);  /* previous call may change the stack */
-          L->top = ra + n;
-        }
-        for (j = 0; j < b && j < n; j++)
-          setobjs2s(L, ra + j, base - n + j);
-        for (; j < b; j++)  /* complete required results with nil */
-          setnilvalue(ra + j);
-        vmbreak;
-#endif
 }
 
 void Compiler::CompileCheckcg(llvm::Value* reg) {
@@ -623,9 +604,10 @@ llvm::Value* Compiler::GetValueRK(int arg, const std::string& name) {
 }
 
 llvm::Value* Compiler::GetUpval(int n) {
-    auto upvals = LoadField(values_.closure, rt_->GetType("UpVal"),
+    auto upvals = GetFieldPtr(values_.closure, rt_->GetType("UpVal"),
             offsetof(LClosure, upvals), "upvals");
-    auto upval = builder_.CreateGEP(upvals, MakeInt(n), "upval");
+    auto upvalptr = builder_.CreateGEP(upvals, MakeInt(n), "upval");
+    auto upval = builder_.CreateLoad(upvalptr, "upval");
     return LoadField(upval, rt_->GetType("TValue"), offsetof(UpVal, v), "val");
 }
 
@@ -646,6 +628,7 @@ void Compiler::SetRegister(llvm::Value* reg, llvm::Value* value) {
 void Compiler::UpdateStack() {
     values_.base = LoadField(values_.ci, rt_->GetType("TValue"),
             ((uintptr_t)&(((CallInfo*)0)->u.l.base)), "base");
+    // test offsetof(CallInfo, u.l.base)
 }
 
 void Compiler::ReloadTop() {
@@ -673,19 +656,6 @@ llvm::BasicBlock* Compiler::CreateSubBlock(const std::string& suffix,
         preview = blocks_[curr_];
     auto name = blocks_[curr_]->getName() + suffix;
     return llvm::BasicBlock::Create(context_, name, function_, preview);
-}
-
-void Compiler::DebugPrint(const std::string& message) {
-    auto function = module_->getFunction("printf");
-    if (!function) {
-        auto rettype = llvm::Type::getVoidTy(context_);
-        auto paramtype = llvm::PointerType::get(MakeIntT(1), 0);
-        auto functype = llvm::FunctionType::get(rettype, {paramtype}, true);
-        function = llvm::Function::Create(functype,
-                llvm::Function::ExternalLinkage, "printf", module_.get());
-    }
-    auto args = {builder_.CreateGlobalStringPtr(message + "\n")};
-    builder_.CreateCall(function, args);
 }
 
 }
