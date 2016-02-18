@@ -3,7 +3,7 @@
 
 --require"julia" local f=f
 
-lll.setautocompile(false)
+--lll.setautocompile(false)
 
 local io=io
 local root,exterior

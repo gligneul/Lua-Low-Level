@@ -33,7 +33,8 @@ class Runtime;
 
 class Compiler {
 public:
-    static const llvm::CodeGenOpt::Level OPT_LEVEL = llvm::CodeGenOpt::None;
+    //static const llvm::CodeGenOpt::Level OPT_LEVEL = llvm::CodeGenOpt::None;
+    static const llvm::CodeGenOpt::Level OPT_LEVEL = llvm::CodeGenOpt::Aggressive;
 
     // Constructor, receiver the proto that will be compiled
     Compiler(Proto* proto);

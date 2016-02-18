@@ -2,8 +2,6 @@
 -- September, 2015
 -- Author: Gabriel de Quadros Ligneul
 -- Copyright Notice for LLL: see lllcore.h
---
--- loopsum.lua
 
 local benchmark_util = require 'benchmarks/util'
 

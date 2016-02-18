@@ -1,3 +1,12 @@
+-- LLL - Lua Low Level
+-- September, 2015
+-- Author: Gabriel de Quadros Ligneul
+-- Copyright Notice for LLL: see lllcore.h
+
+local benchmark_util = require 'benchmarks/util'
+
+benchmark_util(function()
+
 local N = tonumber(arg[1] or 8)    -- board size
 
 lll.setautocompile(false)
@@ -17,6 +26,7 @@ end
 
 -- print a board
 local function printsolution (a)
+--[[
   for i = 1, N do
     for j = 1, N do
       io.write(a[i] == j and "X" or "-", " ")
@@ -24,6 +34,7 @@ local function printsolution (a)
     io.write("\n")
   end
   io.write("\n")
+--]]
 end
 
 
@@ -41,9 +52,8 @@ local function addqueen (a, n, N)
   end
 end
 
-assert(lll.compile(addqueen))
---lll.dump(addqueen)
 
 -- run the program
 addqueen({}, 1, N)
 
+end)

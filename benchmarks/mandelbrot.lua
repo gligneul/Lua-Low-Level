@@ -1,8 +1,12 @@
-#!./src/lua
+-- LLL - Lua Low Level
+-- September, 2015
+-- Author: Gabriel de Quadros Ligneul
+-- Copyright Notice for LLL: see lllcore.h
+--
+-- Adapted from:
 -- The Computer Language Benchmarks Game
 -- http://benchmarksgame.alioth.debian.org/
 -- contributed by Mike Pall
--- Modified by Gabriel Ligneul to work with LLL benchmarks
 
 local benchmark_util = require 'benchmarks/util'
 
