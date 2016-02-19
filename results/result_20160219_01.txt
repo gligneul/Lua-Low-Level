@@ -1,0 +1,44 @@
+Specs:
+Linux 2.6 x64 (CentOS 6)
+i7-4770 @ 3.4GHz
+
+Module: benchmarks/ack.lua 8 2
+     avg        stddev
+Lua: 0.00704	0.00020
+LLL: 0.00948	0.00245
+
+Module: benchmarks/fixpoint_fact.lua 90
+     avg        stddev
+Lua: 0.01220	0.00100
+LLL: 0.01240	0.00180
+
+Module: benchmarks/heapsort.lua
+     avg        stddev
+Lua: 0.04736	0.00309
+LLL: 0.04320	0.00050
+
+Module: benchmarks/loopsum.lua
+     avg        stddev
+Lua: 0.75820	0.00271
+LLL: 0.44324	0.01074
+
+Module: benchmarks/mandelbrot.lua
+     avg        stddev
+Lua: 1.06872	0.00207
+LLL: 0.72804	0.00303
+
+Module: benchmarks/matmul.lua
+     avg        stddev
+Lua: 0.65688	0.00981
+LLL: 0.60320	0.01829
+
+Module: benchmarks/queen.lua 11
+     avg        stddev
+Lua: 0.51000	0.00334
+LLL: 0.50884	0.00197
+
+Module: benchmarks/sudoku.lua
+     avg        stddev
+Lua: 0.28760	0.00235
+LLL: 0.29336	0.00261
+
