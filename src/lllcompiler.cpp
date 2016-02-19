@@ -115,6 +115,7 @@ void Compiler::CompileInstructions() {
             case OP_SETTABLE: CompileSettable(); break;
             case OP_NEWTABLE: CompileNewtable(); break;
             case OP_SELF:     CompileSelf(); break;
+            //case OP_ADD:      CompileArithIF("LLLAdd"); break;
             case OP_ADD:      CompileBinop("lll_addrr"); break;
             case OP_SUB:      CompileBinop("lll_subrr"); break;
             case OP_MUL:      CompileBinop("lll_mulrr"); break;
@@ -294,6 +295,18 @@ void Compiler::CompileSelf() {
         GetValueRK(GETARG_C(instr_), "rkc")
     };
     CreateCall("LLLSelf", args);
+}
+
+void Compiler::CompileArithIF(const std::string& function) {
+    int b = GETARG_B(instr_);
+    int c = GETARG_C(instr_);
+    auto args = {
+        values_.state,
+        GetValueR(GETARG_A(instr_), "ra"),
+        GetValueRIF(b, "rkb"),
+        GetValueRIF(c, "rkc")
+    };
+    CreateCall(function + GetTypeRIF(b) + GetTypeRIF(c), args);
 }
 
 void Compiler::CompileBinop(const std::string& function) {
@@ -601,6 +614,39 @@ llvm::Value* Compiler::GetValueK(int arg, const std::string& name) {
 
 llvm::Value* Compiler::GetValueRK(int arg, const std::string& name) {
     return ISK(arg) ? GetValueK(INDEXK(arg), name) : GetValueR(arg, name);
+}
+
+llvm::Value* Compiler::GetValueRIF(int arg,
+        const std::string& name) {
+    if (ISK(arg)) {
+        int karg = INDEXK(arg);
+        auto k = proto_->k + karg;
+        if (ttisinteger(k)) {
+            auto type = rt_->GetType("lua_Integer");
+            return llvm::ConstantInt::get(type, ivalue(k));
+        } else if (ttisfloat(k)) {
+            auto type = rt_->GetType("lua_Number");
+            return llvm::ConstantFP::get(type, fltvalue(k));
+        } else {
+            return GetValueK(karg, name);
+        }
+    } else {
+         return GetValueR(arg, name);
+    }
+}
+
+const char* Compiler::GetTypeRIF(int arg) {
+    if (ISK(arg)) {
+        auto k = proto_->k + INDEXK(arg);
+        if (ttisinteger(k))
+            return "I";
+        else if (ttisfloat(k))
+            return "F";
+        else
+            return "R";
+    } else {
+        return "R";
+    }
 }
 
 llvm::Value* Compiler::GetUpval(int n) {

@@ -11,10 +11,12 @@
 n_tests=25
 
 modules_prefix='benchmarks/'
+# This tests are disable because LLL lacks support for proper tail call
+#    'ack.lua 8 2'
+#    'fixpoint_fact.lua 90'
 modules=(
-    'ack.lua 8 2'
-    'fixpoint_fact.lua 90'
     'heapsort.lua'
+    'increment.lua'
     'loopsum.lua'
     'mandelbrot.lua'
     'matmul.lua'
@@ -36,7 +38,8 @@ function benchmark {
         s=`echo "$s + ( ${ts[$i]} - $avg ) ^ 2" | bc -l`
     done
     s=`echo "sqrt( $s / ( $n_tests - 1 ) )" | bc -l`
-    printf "%.5f\t%.5f" "$avg" "$s"
+    sp=`echo "100 * $s / $avg" | bc -l`
+    printf "%.5f\t%.5f\t(%.5f%%)" "$avg" "$s" "$sp"
 }
 
 echo "Distro: "`cat /etc/*-release | head -1`
@@ -56,14 +59,6 @@ for m in "${modules[@]}"; do
 
     luatime=`echo $luatime | sed 's/ .*//'`
     llltime=`echo $llltime | sed 's/ .*//'`
-    if [ `echo "$llltime < $luatime" | bc -l` -ne 0 ]; then
-        p=`echo "-100 + 100 * $luatime / $llltime" | bc -l`
-        printf "     %.2f%% faster\n" $p
-    else
-        p=`echo "-100 + 100 * $llltime / $luatime" | bc -l`
-        printf "     %.2f%% slower\n" $p
-    fi
-
-    echo ""
+    printf "     %.3f time\n\n" `echo "$llltime / $luatime" | bc -l`
 done
 

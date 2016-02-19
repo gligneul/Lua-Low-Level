@@ -9,7 +9,7 @@ benchmark_util(function()
 
 local a = 0
 for i = 1, 1e8 do
-    a = a + i
+    a = a + 1
 end
 
 end)

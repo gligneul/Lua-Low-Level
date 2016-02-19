@@ -55,6 +55,76 @@ void LLLSelf(lua_State* L, TValue* ra, TValue* rb, TValue* rc) {
     }
 }
 
+// Declares one function for each constant optimization case:
+// LLL<opname>RR (lua_State, RA, R, R)
+// LLL<opname>IR (lua_State, RA, I, R)
+// LLL<opname>RI (lua_State, RA, R, I)
+// LLL<opname>FR (lua_State, RA, F, R)
+// LLL<opname>RF (lua_State, RA, R, F)
+#define LLLArithIF(opname, op, numop, optm) \
+void LLL##opname##RR(lua_State* L, TValue* ra, TValue* rb, TValue* rc) { \
+    lua_Number nb, nc; \
+    if (ttisinteger(rb) && ttisinteger(rc)) { \
+        lua_Integer ib = ivalue(rb); \
+        lua_Integer ic = ivalue(rc); \
+        setivalue(ra, intop(op, ib, ic)); \
+    } else if (tonumber(rb, &nb) && tonumber(rc, &nc)) { \
+        setfltvalue(ra, numop(L, nb, nc)); \
+    } else { \
+        luaT_trybinTM(L, rb, rc, ra, optm); \
+    } \
+} \
+void LLL##opname##IR(lua_State* L, TValue* ra, lua_Integer ib, TValue* rc) { \
+    lua_Number nc; \
+    if (ttisinteger(rc)) { \
+        lua_Integer ic = ivalue(rc); \
+        setivalue(ra, intop(op, ib, ic)); \
+    } else if (tonumber(rc, &nc)) { \
+        lua_Number nb = cast_num(ib); \
+        setfltvalue(ra, numop(L, nb, nc)); \
+    } else { \
+        TValue rb; \
+        setivalue(&rb, ib); \
+        luaT_trybinTM(L, &rb, rc, ra, optm); \
+    } \
+} \
+void LLL##opname##RI(lua_State* L, TValue* ra, TValue* rb, lua_Integer ic) { \
+    lua_Number nb; \
+    if (ttisinteger(rb)) { \
+        lua_Integer ib = ivalue(rb); \
+        setivalue(ra, intop(op, ib, ic)); \
+    } else if (tonumber(rb, &nb)) { \
+        lua_Number nc = cast_num(ic); \
+        setfltvalue(ra, numop(L, nb, nc)); \
+    } else { \
+        TValue rc; \
+        setivalue(&rc, ic); \
+        luaT_trybinTM(L, rb, &rc, ra, optm); \
+    } \
+} \
+void LLL##opname##FR(lua_State* L, TValue* ra, lua_Number nb, TValue* rc) { \
+    lua_Number nc; \
+    if (tonumber(rc, &nc)) { \
+        setfltvalue(ra, numop(L, nb, nc)); \
+    } else { \
+        TValue rb; \
+        setfltvalue(&rb, nb); \
+        luaT_trybinTM(L, &rb, rc, ra, optm); \
+    } \
+} \
+void LLL##opname##RF(lua_State* L, TValue* ra, TValue* rb, lua_Number nc) { \
+    lua_Number nb; \
+    if (tonumber(rb, &nb)) { \
+        setfltvalue(ra, numop(L, nb, nc)); \
+    } else { \
+        TValue rc; \
+        setfltvalue(&rc, nc); \
+        luaT_trybinTM(L, rb, &rc, ra, optm); \
+    } \
+} \
+
+LLLArithIF(Add, +, luai_numadd, TM_ADD);
+
 }
 
 static void lll_addrr (lua_State *L, TValue *ra, TValue *rb, TValue *rc) {
@@ -413,6 +483,17 @@ void Runtime::InitTypes() {
     ADDTYPE(Proto);
     ADDTYPE(UpVal);
     ADDTYPE(Table);
+
+    types_["lua_Integer"] = llvm::IntegerType::get(
+            context_, 8 * sizeof(lua_Integer));
+
+    #if LUA_FLOAT_TYPE == LUA_FLOAT_FLOAT
+    types_["lua_Number"] = llvm::Type::getFloatTy(context_);
+    #elif LUA_FLOAT_TYPE == LUA_FLOAT_LONGDOUBLE
+    types_["lua_Number"] = llvm::Type::getFP128Ty(context_);
+    #elif LUA_FLOAT_TYPE == LUA_FLOAT_DOUBLE
+    types_["lua_Number"] = llvm::Type::getDoubleTy(context_);
+    #endif
 }
 
 void Runtime::InitFunctions() {
@@ -432,12 +513,26 @@ void Runtime::InitFunctions() {
     llvm::Type* tci = types_["CallInfo"];
     llvm::Type* ttable = types_["Table"];
     llvm::Type* tupval = types_["UpVal"];
+    llvm::Type* tluaint = types_["lua_Integer"];
+    llvm::Type* tluanumber = types_["lua_Number"];
     llvm::Type* tvoid = llvm::Type::getVoidTy(context_);
     llvm::Type* tint = llvm::IntegerType::get(context_, 8 * sizeof(int));
 
     ADDFUNCTION(LLLGetTable, tvoid, tstate, tvalue, tvalue, tvalue);
     ADDFUNCTION(LLLSetTable, tvoid, tstate, tvalue, tvalue, tvalue);
     ADDFUNCTION(LLLSelf, tvoid, tstate, tvalue, tvalue, tvalue);
+
+    #define ADDARITH_IF(opname) { \
+        ADDFUNCTION(LLL##opname##RR, tvoid, tstate, tvalue, tvalue, tvalue); \
+        ADDFUNCTION(LLL##opname##IR, tvoid, tstate, tvalue, tluaint, tvalue); \
+        ADDFUNCTION(LLL##opname##RI, tvoid, tstate, tvalue, tvalue, tluaint); \
+        ADDFUNCTION(LLL##opname##FR, \
+                tvoid, tstate, tvalue, tluanumber, tvalue); \
+        ADDFUNCTION(LLL##opname##RF, \
+                tvoid, tstate, tvalue, tvalue, tluanumber); \
+    }
+
+    ADDARITH_IF(Add);
 
     LOADBINOP(lll_addrr);
     LOADBINOP(lll_subrr);

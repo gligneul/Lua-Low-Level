@@ -33,8 +33,8 @@ class Runtime;
 
 class Compiler {
 public:
-    //static const llvm::CodeGenOpt::Level OPT_LEVEL = llvm::CodeGenOpt::None;
-    static const llvm::CodeGenOpt::Level OPT_LEVEL = llvm::CodeGenOpt::Aggressive;
+    static const llvm::CodeGenOpt::Level OPT_LEVEL = llvm::CodeGenOpt::None;
+    //static const llvm::CodeGenOpt::Level OPT_LEVEL = llvm::CodeGenOpt::Aggressive;
 
     // Constructor, receiver the proto that will be compiled
     Compiler(Proto* proto);
@@ -78,6 +78,7 @@ private:
     void CompileSettable();
     void CompileNewtable();
     void CompileSelf();
+    void CompileArithIF(const std::string& function);
     void CompileBinop(const std::string& function);
     void CompileUnop(const std::string& function);
     void CompileConcat();
@@ -121,6 +122,10 @@ private:
     llvm::Value* GetValueR(int arg, const std::string& name);
     llvm::Value* GetValueK(int arg, const std::string& name);
     llvm::Value* GetValueRK(int arg, const std::string& name);
+    llvm::Value* GetValueRIF(int arg, const std::string& name);
+
+    // Obtains the string representation of the value
+    const char* GetTypeRIF(int arg);
 
     // Gets the upvalue $n
     llvm::Value* GetUpval(int n);
