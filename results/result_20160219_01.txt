@@ -1,44 +1,52 @@
-Specs:
-Linux 2.6 x64 (CentOS 6)
-i7-4770 @ 3.4GHz
+Distro: CentOS release 6.6 (Final)
+Kernel: 2.6.32-504.30.3.el6.x86_64
+CPU:    Intel(R) Core(TM) i7-4770 CPU @ 3.40GHz
 
 Module: benchmarks/ack.lua 8 2
      avg        stddev
-Lua: 0.00704	0.00020
-LLL: 0.00948	0.00245
+Lua: 0.00868	0.00152
+LLL: 0.00832	0.00204
+     4.33% faster
 
 Module: benchmarks/fixpoint_fact.lua 90
      avg        stddev
-Lua: 0.01220	0.00100
-LLL: 0.01240	0.00180
+Lua: 0.01228	0.00140
+LLL: 0.01240	0.00200
+     0.98% slower
 
 Module: benchmarks/heapsort.lua
      avg        stddev
-Lua: 0.04736	0.00309
-LLL: 0.04320	0.00050
+Lua: 0.04724	0.00235
+LLL: 0.04312	0.00044
+     9.55% faster
 
 Module: benchmarks/loopsum.lua
      avg        stddev
-Lua: 0.75820	0.00271
-LLL: 0.44324	0.01074
+Lua: 0.75812	0.00273
+LLL: 0.48148	0.18722
+     57.46% faster
 
 Module: benchmarks/mandelbrot.lua
      avg        stddev
-Lua: 1.06872	0.00207
-LLL: 0.72804	0.00303
+Lua: 1.06864	0.00225
+LLL: 0.73252	0.01629
+     45.89% faster
 
 Module: benchmarks/matmul.lua
      avg        stddev
-Lua: 0.65688	0.00981
-LLL: 0.60320	0.01829
+Lua: 0.65640	0.00799
+LLL: 0.60064	0.01241
+     9.28% faster
 
 Module: benchmarks/queen.lua 11
      avg        stddev
-Lua: 0.51000	0.00334
-LLL: 0.50884	0.00197
+Lua: 0.50956	0.00200
+LLL: 0.50912	0.00174
+     0.09% faster
 
 Module: benchmarks/sudoku.lua
      avg        stddev
-Lua: 0.28760	0.00235
-LLL: 0.29336	0.00261
+Lua: 0.29100	0.00877
+LLL: 0.29616	0.01431
+     1.77% slower
 

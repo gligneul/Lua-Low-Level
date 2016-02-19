@@ -39,6 +39,12 @@ function benchmark {
     printf "%.5f\t%.5f" "$avg" "$s"
 }
 
+echo "Distro: "`cat /etc/*-release | head -1`
+echo "Kernel: "`uname -r`
+echo "CPU:    "`cat /proc/cpuinfo | grep 'model name' | tail -1 | \
+                sed 's/model name.*:.//'`
+echo ""
+
 for m in "${modules[@]}"; do
     path="$modules_prefix""$m""$modules_suffix"
     luatime=`benchmark ./src/lua $path`
@@ -47,6 +53,17 @@ for m in "${modules[@]}"; do
     echo "     avg        stddev"
     echo "Lua: $luatime"
     echo "LLL: $llltime"
+
+    luatime=`echo $luatime | sed 's/ .*//'`
+    llltime=`echo $llltime | sed 's/ .*//'`
+    if [ `echo "$llltime < $luatime" | bc -l` -ne 0 ]; then
+        p=`echo "-100 + 100 * $luatime / $llltime" | bc -l`
+        printf "     %.2f%% faster\n" $p
+    else
+        p=`echo "-100 + 100 * $llltime / $luatime" | bc -l`
+        printf "     %.2f%% slower\n" $p
+    fi
+
     echo ""
 done
 
