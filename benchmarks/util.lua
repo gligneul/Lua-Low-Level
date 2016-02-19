@@ -6,6 +6,7 @@
 -- matmul.lua
 
 return function(f)
+    lll.setautocompile(false)
     if arg[1] == '--lll-compile' then
         assert(lll.compile(f))
     end

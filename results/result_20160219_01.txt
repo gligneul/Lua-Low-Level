@@ -4,49 +4,49 @@ CPU:    Intel(R) Core(TM) i7-4770 CPU @ 3.40GHz
 
 Module: benchmarks/ack.lua 8 2
      avg        stddev
-Lua: 0.00868	0.00152
-LLL: 0.00832	0.00204
-     4.33% faster
+Lua: 0.00896	0.00020
+LLL: 0.00304	0.00020
+     194.74% faster
 
 Module: benchmarks/fixpoint_fact.lua 90
      avg        stddev
-Lua: 0.01228	0.00140
-LLL: 0.01240	0.00200
-     0.98% slower
+Lua: 0.01048	0.00457
+LLL: 0.00584	0.00262
+     79.45% faster
 
 Module: benchmarks/heapsort.lua
      avg        stddev
-Lua: 0.04724	0.00235
-LLL: 0.04312	0.00044
-     9.55% faster
+Lua: 0.04704	0.00045
+LLL: 0.04340	0.00071
+     8.39% faster
 
 Module: benchmarks/loopsum.lua
      avg        stddev
-Lua: 0.75812	0.00273
-LLL: 0.48148	0.18722
-     57.46% faster
+Lua: 0.75912	0.00105
+LLL: 0.44000	0.00365
+     72.53% faster
 
 Module: benchmarks/mandelbrot.lua
      avg        stddev
-Lua: 1.06864	0.00225
-LLL: 0.73252	0.01629
-     45.89% faster
+Lua: 1.07060	0.00132
+LLL: 0.72804	0.00045
+     47.05% faster
 
 Module: benchmarks/matmul.lua
      avg        stddev
-Lua: 0.65640	0.00799
-LLL: 0.60064	0.01241
-     9.28% faster
+Lua: 0.65604	0.00188
+LLL: 0.61208	0.02907
+     7.18% faster
 
 Module: benchmarks/queen.lua 11
      avg        stddev
-Lua: 0.50956	0.00200
-LLL: 0.50912	0.00174
-     0.09% faster
+Lua: 0.51288	0.00417
+LLL: 0.51008	0.00182
+     0.55% faster
 
 Module: benchmarks/sudoku.lua
      avg        stddev
-Lua: 0.29100	0.00877
-LLL: 0.29616	0.01431
-     1.77% slower
+Lua: 0.38704	0.00657
+LLL: 0.29212	0.00327
+     32.49% faster
 
