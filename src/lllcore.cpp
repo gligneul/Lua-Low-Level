@@ -80,6 +80,16 @@ void LLLFreeEngine (lua_State *L, Proto *p) {
 }
 
 void LLLDump (Proto *p) {
-    GETENGINE(p)->Dump();
+    auto e = GETENGINE(p);
+    if (!e)
+        std::cerr << "Engine not found!";
+    e->Dump();
+}
+
+void LLLWrite (Proto *p, const char *path) {
+    auto e = GETENGINE(p);
+    if (!e)
+        std::cerr << "Engine not found!";
+    e->Write(path);
 }
 

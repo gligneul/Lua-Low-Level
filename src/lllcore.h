@@ -63,5 +63,8 @@ void LLLFreeEngine (lua_State *L, Proto *p);
 /* Dumps the LLMV function (debug) */
 void LLLDump (Proto *p);
 
+/* Writes the bytecode and the asm of $p to $path */
+void LLLWrite (Proto *p, const char *path);
+
 #endif
 

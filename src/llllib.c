@@ -67,12 +67,21 @@ static int lll_dump (lua_State *L) {
     return 0;
 }
 
+static int lll_write (lua_State *L) {
+    Proto *p = getclosure(L)->p;
+    const char *path = luaL_tolstring(L, 2, NULL);
+    if (!path) path = "f";
+    LLLWrite(p, path);
+    return 0;
+}
+
 static const luaL_Reg lib_f[] = {
     {"compile", lll_compile},
     {"setautocompile", lll_setautocompile},
     {"getautocompile", lll_getautocompile},
     {"iscompiled", lll_iscompiled},
     {"dump", lll_dump},
+    {"write", lll_write},
     {NULL, NULL}
 };
 

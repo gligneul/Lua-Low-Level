@@ -26,6 +26,9 @@ public:
     // Dumps the compiled modules
     void Dump();
 
+    // Writes the bytecode and asm files
+    void Write(const std::string& path);
+
 private:
     std::unique_ptr<llvm::ExecutionEngine> ee_;
     llvm::Module* module_;
