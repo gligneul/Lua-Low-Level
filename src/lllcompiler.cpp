@@ -101,6 +101,7 @@ void Compiler::CompileInstructions() {
         builder_.SetInsertPoint(blocks_[curr_]);
         instr_ = proto_->code[curr_];
         UpdateStack();
+        //DebugPrint(luaP_opnames[GET_OPCODE(instr_)]);
         switch(GET_OPCODE(instr_)) {
             case OP_MOVE:     CompileMove(); break;
             case OP_LOADK:    CompileLoadk(false); break;
@@ -115,8 +116,8 @@ void Compiler::CompileInstructions() {
             case OP_SETTABLE: CompileSettable(); break;
             case OP_NEWTABLE: CompileNewtable(); break;
             case OP_SELF:     CompileSelf(); break;
-            //case OP_ADD:      CompileArithIF("LLLAdd"); break;
-            case OP_ADD:      CompileBinop("lll_addrr"); break;
+            case OP_ADD:      CompileArithIF("LLLAdd"); break;
+            //case OP_ADD:      CompileBinop("lll_addrr"); break;
             case OP_SUB:      CompileBinop("lll_subrr"); break;
             case OP_MUL:      CompileBinop("lll_mulrr"); break;
             case OP_MOD:      CompileBinop("lll_modrr"); break;
@@ -249,14 +250,15 @@ void Compiler::CompileSettabup() {
 }
 
 void Compiler::CompileSetupval() {
-    auto upvals = LoadField(values_.closure, rt_->GetType("UpVal"),
+    auto upvals = GetFieldPtr(values_.closure, rt_->GetType("UpVal"),
             offsetof(LClosure, upvals), "upvals");
-    auto upval = builder_.CreateGEP(upvals, MakeInt(GETARG_B(instr_)), "upval");
+    auto upvalptr = builder_.CreateGEP(upvals, MakeInt(GETARG_B(instr_)),
+            "upvalptr");
+    auto upval = builder_.CreateLoad(upvalptr);
     auto v = LoadField(upval, rt_->GetType("TValue"), offsetof(UpVal, v), "v");
     auto ra = GetValueR(GETARG_A(instr_), "ra");
     SetRegister(v, ra);
-    auto args = {values_.state, upval};
-    CreateCall("lll_upvalbarrier", args);
+    CreateCall("lll_upvalbarrier", {values_.state, upval});
 }
 
 void Compiler::CompileSettable() {
