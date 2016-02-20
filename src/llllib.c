@@ -69,7 +69,7 @@ static int lll_dump (lua_State *L) {
 
 static int lll_write (lua_State *L) {
     Proto *p = getclosure(L)->p;
-    const char *path = luaL_tolstring(L, 2, NULL);
+    const char *path = lua_tolstring(L, 2, NULL);
     if (!path) path = "f";
     LLLWrite(p, path);
     return 0;

@@ -81,15 +81,17 @@ void LLLFreeEngine (lua_State *L, Proto *p) {
 
 void LLLDump (Proto *p) {
     auto e = GETENGINE(p);
-    if (!e)
-        std::cerr << "Engine not found!";
-    e->Dump();
+    if (e)
+        e->Dump();
+    else
+        std::cerr << "LLDump: Engine not found!\n";
 }
 
 void LLLWrite (Proto *p, const char *path) {
     auto e = GETENGINE(p);
-    if (!e)
-        std::cerr << "Engine not found!";
-    e->Write(path);
+    if (e)
+        e->Write(path);
+    else
+        std::cerr << "LLLWrite: Engine not found!\n";
 }
 

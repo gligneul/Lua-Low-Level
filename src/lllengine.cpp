@@ -7,6 +7,7 @@
 ** lllengine.cpp
 */
 
+#include <fstream>
 #include <iostream>
 
 #include <llvm/IR/Module.h>
@@ -31,11 +32,19 @@ void Engine::Dump() {
 }
 
 void Engine::Write(const std::string& path) {
-    (void)path;
     std::string module_str;
     llvm::raw_string_ostream module_os(module_str);
     module_->print(module_os, nullptr);
-    std::cout << module_str;
+    auto filename = path + ".bc";
+    std::ofstream fout(filename);
+    if (fout.is_open()) {
+        fout << module_str;
+        fout.close();
+        system(("llc -O2 " + filename).c_str());
+    } else {
+        std::cerr << "Engine::Write: Couldn't save the file " << filename
+                  << "\n";
+    }
 }
 
 }
