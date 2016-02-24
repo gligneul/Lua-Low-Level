@@ -7,12 +7,8 @@
 ** lllcompiler.cpp
 */
 
-#include <iostream>
-#include <sstream>
-
 #include <llvm/ADT/StringRef.h>
 #include <llvm/ExecutionEngine/MCJIT.h>
-#include <llvm/IR/Constant.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Support/TargetSelect.h>
@@ -20,6 +16,7 @@
 #include "lllcompiler.h"
 #include "lllengine.h"
 #include "lllruntime.h"
+#include "lllvararg.h"
 
 extern "C" {
 #include "lprefix.h"
@@ -34,15 +31,8 @@ extern "C" {
 namespace lll {
 
 Compiler::Compiler(Proto* proto) :
-    proto_(proto),
-    context_(llvm::getGlobalContext()),
-    rt_(Runtime::Instance()),
-    engine_(nullptr),
-    module_(new llvm::Module("lll_module", context_)),
-    function_(CreateMainFunction()),
-    blocks_(proto_->sizecode, nullptr),
-    builder_(context_),
-    curr_(0) {
+    cs_(proto),
+    engine_(nullptr) {
     static bool init = true;
     if (init) {
         llvm::InitializeNativeTarget();
@@ -53,7 +43,6 @@ Compiler::Compiler(Proto* proto) :
 }
 
 bool Compiler::Compile() {
-    CreateBlocks();
     CompileInstructions();
     return VerifyModule() && CreateEngine();
 }
@@ -66,43 +55,13 @@ Engine* Compiler::GetEngine() {
     return engine_.release();
 }
 
-llvm::Function* Compiler::CreateMainFunction() {
-    auto ret = MakeIntT(sizeof(int));
-    auto params = {rt_->GetType("lua_State"), rt_->GetType("LClosure")};
-    auto type = llvm::FunctionType::get(ret, params, false);
-    return llvm::Function::Create(type, llvm::Function::ExternalLinkage,
-            "lll", module_.get());
-}
-
-void Compiler::CreateBlocks() {
-    auto& args = function_->getArgumentList();
-    values_.state = &args.front();
-    values_.state->setName("state");
-    values_.closure = &args.back();
-    values_.closure->setName("closure");
-
-    auto entry = llvm::BasicBlock::Create(context_, "entry", function_);
-    builder_.SetInsertPoint(entry);
-    values_.ci = LoadField(values_.state, rt_->GetType("CallInfo"),
-            offsetof(lua_State, ci), "ci");
-
-    for (size_t i = 0; i < blocks_.size(); ++i) {
-        auto instruction = luaP_opnames[GET_OPCODE(proto_->code[i])];
-        std::stringstream name;
-        name << "block." << i << "." << instruction;
-        blocks_[i] = llvm::BasicBlock::Create(context_, name.str(), function_);
-    }
-
-    builder_.CreateBr(blocks_[0]);
-}
-
 void Compiler::CompileInstructions() {
-    for (curr_ = 0; curr_ < proto_->sizecode; ++curr_) {
-        builder_.SetInsertPoint(blocks_[curr_]);
-        instr_ = proto_->code[curr_];
-        UpdateStack();
-        //DebugPrint(luaP_opnames[GET_OPCODE(instr_)]);
-        switch(GET_OPCODE(instr_)) {
+    for (cs_.curr_ = 0; cs_.curr_ < cs_.proto_->sizecode; ++cs_.curr_) {
+        cs_.builder_.SetInsertPoint(cs_.blocks_[cs_.curr_]);
+        cs_.instr_ = cs_.proto_->code[cs_.curr_];
+        cs_.UpdateStack();
+        //DebugPrint(luaP_opnames[GET_OPCODE(cs_.instr_)]);
+        switch(GET_OPCODE(cs_.instr_)) {
             case OP_MOVE:     CompileMove(); break;
             case OP_LOADK:    CompileLoadk(false); break;
             case OP_LOADKX:   CompileLoadk(true); break;
@@ -116,8 +75,7 @@ void Compiler::CompileInstructions() {
             case OP_SETTABLE: CompileSettable(); break;
             case OP_NEWTABLE: CompileNewtable(); break;
             case OP_SELF:     CompileSelf(); break;
-            case OP_ADD:      CompileArithIF("LLLAdd"); break;
-            //case OP_ADD:      CompileBinop("lll_addrr"); break;
+            case OP_ADD:      CompileBinop("lll_addrr"); break;
             case OP_SUB:      CompileBinop("lll_subrr"); break;
             case OP_MUL:      CompileBinop("lll_mulrr"); break;
             case OP_MOD:      CompileBinop("lll_modrr"); break;
@@ -149,25 +107,25 @@ void Compiler::CompileInstructions() {
             case OP_TFORLOOP: CompileTforloop(); break;
             case OP_SETLIST:  CompileSetlist(); break;
             case OP_CLOSURE:  CompileClosure(); break;
-            case OP_VARARG:   CompileVararg(); break;
+            case OP_VARARG:   Vararg::Compile(cs_); break;
             case OP_EXTRAARG: /* ignored */ break;
         }
-        if (!blocks_[curr_]->getTerminator())
-            builder_.CreateBr(blocks_[curr_ + 1]);
+        if (!cs_.blocks_[cs_.curr_]->getTerminator())
+            cs_.builder_.CreateBr(cs_.blocks_[cs_.curr_ + 1]);
     }
 }
 
 bool Compiler::VerifyModule() {
     llvm::raw_string_ostream error_os(error_);
-    bool err = llvm::verifyModule(*module_, &error_os);
+    bool err = llvm::verifyModule(*cs_.module_, &error_os);
     if (err)
-        module_->dump();
+        cs_.module_->dump();
     return !err;
 }
 
 bool Compiler::CreateEngine() {
-    auto module = module_.get();
-    auto engine = llvm::EngineBuilder(module_.release())
+    auto module = cs_.module_.get();
+    auto engine = llvm::EngineBuilder(cs_.module_.release())
             .setErrorStr(&error_)
             .setOptLevel(OPT_LEVEL)
             .setEngineKind(llvm::EngineKind::JIT)
@@ -183,527 +141,312 @@ bool Compiler::CreateEngine() {
 }
 
 void Compiler::CompileMove() {
-    auto ra = GetValueR(GETARG_A(instr_), "ra");
-    auto rb = GetValueR(GETARG_B(instr_), "rb");
-    SetRegister(ra, rb);
+    auto ra = cs_.GetValueR(GETARG_A(cs_.instr_), "ra");
+    auto rb = cs_.GetValueR(GETARG_B(cs_.instr_), "rb");
+    cs_.SetRegister(ra, rb);
 }
 
 void Compiler::CompileLoadk(bool extraarg) {
-    int kposition = extraarg ? GETARG_Ax(proto_->code[curr_ + 1])
-                             : GETARG_Bx(instr_);
-    auto ra = GetValueR(GETARG_A(instr_), "ra");
-    auto k = GetValueK(kposition, "k");
-    SetRegister(ra, k);
+    int kposition = extraarg ? GETARG_Ax(cs_.proto_->code[cs_.curr_ + 1])
+                             : GETARG_Bx(cs_.instr_);
+    auto ra = cs_.GetValueR(GETARG_A(cs_.instr_), "ra");
+    auto k = cs_.GetValueK(kposition, "k");
+    cs_.SetRegister(ra, k);
 }
 
 void Compiler::CompileLoadbool() {
-    auto ra = GetValueR(GETARG_A(instr_), "ra");
-    SetField(ra, MakeInt(GETARG_B(instr_)), offsetof(TValue, value_), "value");
-    SetField(ra, MakeInt(LUA_TBOOLEAN), offsetof(TValue, tt_), "tag");
-    if (GETARG_C(instr_))
-        builder_.CreateBr(blocks_[curr_ + 2]);
+    auto ra = cs_.GetValueR(GETARG_A(cs_.instr_), "ra");
+    auto value = cs_.MakeInt(GETARG_B(cs_.instr_));
+    auto tag = cs_.MakeInt(LUA_TBOOLEAN);
+    cs_.SetField(ra, value, offsetof(TValue, value_), "value");
+    cs_.SetField(ra, tag, offsetof(TValue, tt_), "tag");
+    if (GETARG_C(cs_.instr_))
+        cs_.builder_.CreateBr(cs_.blocks_[cs_.curr_ + 2]);
 }
 
 void Compiler::CompileLoadnil() {
-    int start = GETARG_A(instr_);
-    int end = start + GETARG_B(instr_);
+    int start = GETARG_A(cs_.instr_);
+    int end = start + GETARG_B(cs_.instr_);
     for (int i = start; i <= end; ++i) {
-        auto r = GetValueR(i, "r");
-        SetField(r, MakeInt(LUA_TNIL), offsetof(TValue, tt_), "tag");
+        auto r = cs_.GetValueR(i, "r");
+        cs_.SetField(r, cs_.MakeInt(LUA_TNIL), offsetof(TValue, tt_), "tag");
     }
 }
 
 void Compiler::CompileGetupval() {
-    auto ra = GetValueR(GETARG_A(instr_), "ra");
-    auto upval = GetUpval(GETARG_B(instr_));
-    SetRegister(ra, upval);
+    auto ra = cs_.GetValueR(GETARG_A(cs_.instr_), "ra");
+    auto upval = cs_.GetUpval(GETARG_B(cs_.instr_));
+    cs_.SetRegister(ra, upval);
 }
 
 void Compiler::CompileGettabup() {
     auto args = {
-        values_.state,
-        GetUpval(GETARG_B(instr_)),
-        GetValueRK(GETARG_C(instr_), "rkc"),
-        GetValueR(GETARG_A(instr_), "ra")
+        cs_.values_.state,
+        cs_.GetUpval(GETARG_B(cs_.instr_)),
+        cs_.GetValueRK(GETARG_C(cs_.instr_), "rkc"),
+        cs_.GetValueR(GETARG_A(cs_.instr_), "ra")
     };
-    CreateCall("LLLGetTable", args);
+    cs_.CreateCall("LLLGetTable", args);
 }
 
 void Compiler::CompileGettable() {
     auto args = {
-        values_.state,
-        GetValueR(GETARG_B(instr_), "rb"),
-        GetValueRK(GETARG_C(instr_), "rkc"),
-        GetValueR(GETARG_A(instr_), "ra")
+        cs_.values_.state,
+        cs_.GetValueR(GETARG_B(cs_.instr_), "rb"),
+        cs_.GetValueRK(GETARG_C(cs_.instr_), "rkc"),
+        cs_.GetValueR(GETARG_A(cs_.instr_), "ra")
     };
-    CreateCall("LLLGetTable", args);
+    cs_.CreateCall("LLLGetTable", args);
 }
 
 void Compiler::CompileSettabup() {
     auto args = {
-        values_.state,
-        GetUpval(GETARG_A(instr_)), 
-        GetValueRK(GETARG_B(instr_), "rkb"),
-        GetValueRK(GETARG_C(instr_), "rkc")
+        cs_.values_.state,
+        cs_.GetUpval(GETARG_A(cs_.instr_)), 
+        cs_.GetValueRK(GETARG_B(cs_.instr_), "rkb"),
+        cs_.GetValueRK(GETARG_C(cs_.instr_), "rkc")
     };
-    CreateCall("LLLSetTable", args);
+    cs_.CreateCall("LLLSetTable", args);
 }
 
 void Compiler::CompileSetupval() {
-    auto upvals = GetFieldPtr(values_.closure, rt_->GetType("UpVal"),
+    auto upvals = cs_.GetFieldPtr(cs_.values_.closure, cs_.rt_.GetType("UpVal"),
             offsetof(LClosure, upvals), "upvals");
-    auto upvalptr = builder_.CreateGEP(upvals, MakeInt(GETARG_B(instr_)),
-            "upvalptr");
-    auto upval = builder_.CreateLoad(upvalptr);
-    auto v = LoadField(upval, rt_->GetType("TValue"), offsetof(UpVal, v), "v");
-    auto ra = GetValueR(GETARG_A(instr_), "ra");
-    SetRegister(v, ra);
-    CreateCall("lll_upvalbarrier", {values_.state, upval});
+    auto upvalptr = cs_.builder_.CreateGEP(upvals,
+            cs_.MakeInt(GETARG_B(cs_.instr_)), "upvalptr");
+    auto upval = cs_.builder_.CreateLoad(upvalptr);
+    auto v = cs_.LoadField(upval, cs_.rt_.GetType("TValue"), offsetof(UpVal, v),
+            "v");
+    auto ra = cs_.GetValueR(GETARG_A(cs_.instr_), "ra");
+    cs_.SetRegister(v, ra);
+    cs_.CreateCall("lll_upvalbarrier", {cs_.values_.state, upval});
 }
 
 void Compiler::CompileSettable() {
     auto args = {
-        values_.state,
-        GetValueR(GETARG_A(instr_), "ra"),
-        GetValueRK(GETARG_B(instr_), "rkb"),
-        GetValueRK(GETARG_C(instr_), "rkc")
+        cs_.values_.state,
+        cs_.GetValueR(GETARG_A(cs_.instr_), "ra"),
+        cs_.GetValueRK(GETARG_B(cs_.instr_), "rkb"),
+        cs_.GetValueRK(GETARG_C(cs_.instr_), "rkc")
     };
-    CreateCall("LLLSetTable", args);
+    cs_.CreateCall("LLLSetTable", args);
 }
 
 void Compiler::CompileNewtable() {
-    int a = GETARG_A(instr_);
-    int b = GETARG_B(instr_);
-    int c = GETARG_C(instr_);
-    auto args = {values_.state, GetValueR(a, "ra")};
-    auto table = CreateCall("lll_newtable", args);
+    int a = GETARG_A(cs_.instr_);
+    int b = GETARG_B(cs_.instr_);
+    int c = GETARG_C(cs_.instr_);
+    auto args = {cs_.values_.state, cs_.GetValueR(a, "ra")};
+    auto table = cs_.CreateCall("lll_newtable", args);
     if (b != 0 || c != 0) {
         args = {
-            values_.state,
+            cs_.values_.state,
             table,
-            MakeInt(luaO_fb2int(b)),
-            MakeInt(luaO_fb2int(c))
+            cs_.MakeInt(luaO_fb2int(b)),
+            cs_.MakeInt(luaO_fb2int(c))
         };
-        CreateCall("luaH_resize", args);
+        cs_.CreateCall("luaH_resize", args);
     }
-    CompileCheckcg(GetValueR(a + 1, "ra1"));
+    CompileCheckcg(cs_.GetValueR(a + 1, "ra1"));
 }
 
 void Compiler::CompileSelf() {
     auto args = {
-        values_.state,
-        GetValueR(GETARG_A(instr_), "ra"),
-        GetValueR(GETARG_B(instr_), "rb"),
-        GetValueRK(GETARG_C(instr_), "rkc")
+        cs_.values_.state,
+        cs_.GetValueR(GETARG_A(cs_.instr_), "ra"),
+        cs_.GetValueR(GETARG_B(cs_.instr_), "rb"),
+        cs_.GetValueRK(GETARG_C(cs_.instr_), "rkc")
     };
-    CreateCall("LLLSelf", args);
-}
-
-void Compiler::CompileArithIF(const std::string& function) {
-    int b = GETARG_B(instr_);
-    int c = GETARG_C(instr_);
-    auto args = {
-        values_.state,
-        GetValueR(GETARG_A(instr_), "ra"),
-        GetValueRIF(b, "rkb"),
-        GetValueRIF(c, "rkc")
-    };
-    CreateCall(function + GetTypeRIF(b) + GetTypeRIF(c), args);
+    cs_.CreateCall("LLLSelf", args);
 }
 
 void Compiler::CompileBinop(const std::string& function) {
     auto args = {
-        values_.state,
-        GetValueR(GETARG_A(instr_), "ra"),
-        GetValueRK(GETARG_B(instr_), "rkb"),
-        GetValueRK(GETARG_C(instr_), "rkc")
+        cs_.values_.state,
+        cs_.GetValueR(GETARG_A(cs_.instr_), "ra"),
+        cs_.GetValueRK(GETARG_B(cs_.instr_), "rkb"),
+        cs_.GetValueRK(GETARG_C(cs_.instr_), "rkc")
     };
-    CreateCall(function, args);
+    cs_.CreateCall(function, args);
 }
 
 void Compiler::CompileUnop(const std::string& function) {
     auto args = {
-        values_.state,
-        GetValueR(GETARG_A(instr_), "ra"),
-        GetValueRK(GETARG_B(instr_), "rkb")
+        cs_.values_.state,
+        cs_.GetValueR(GETARG_A(cs_.instr_), "ra"),
+        cs_.GetValueRK(GETARG_B(cs_.instr_), "rkb")
     };
-    CreateCall(function, args);
+    cs_.CreateCall(function, args);
 }
 
 void Compiler::CompileConcat() {
-    int a = GETARG_A(instr_);
-    int b = GETARG_B(instr_);
-    int c = GETARG_C(instr_);
-    SetTop(c + 1);
-    auto args = {values_.state, MakeInt(c - b + 1)};
-    CreateCall("luaV_concat", args);
+    int a = GETARG_A(cs_.instr_);
+    int b = GETARG_B(cs_.instr_);
+    int c = GETARG_C(cs_.instr_);
+    cs_.SetTop(c + 1);
+    auto args = {cs_.values_.state, cs_.MakeInt(c - b + 1)};
+    cs_.CreateCall("luaV_concat", args);
 
-    auto ra = GetValueR(a, "ra");
-    auto rb = GetValueR(b, "rb");
-    SetRegister(ra, rb);
+    auto ra = cs_.GetValueR(a, "ra");
+    auto rb = cs_.GetValueR(b, "rb");
+    cs_.SetRegister(ra, rb);
 
     if (a >= b)
-        CompileCheckcg(GetValueR(a + 1, "ra_next"));
+        CompileCheckcg(cs_.GetValueR(a + 1, "ra_next"));
     else
         CompileCheckcg(rb);
 
-    ReloadTop();
+    cs_.ReloadTop();
 }
 
 void Compiler::CompileJmp() {
-    builder_.CreateBr(blocks_[curr_ + GETARG_sBx(instr_) + 1]);
+    cs_.builder_.CreateBr(cs_.blocks_[cs_.curr_ + GETARG_sBx(cs_.instr_) + 1]);
 }
 
 void Compiler::CompileCmp(const std::string& function) {
     auto args = {
-        values_.state,
-        GetValueRK(GETARG_B(instr_), "rkb"),
-        GetValueRK(GETARG_C(instr_), "rkc")
+        cs_.values_.state,
+        cs_.GetValueRK(GETARG_B(cs_.instr_), "rkb"),
+        cs_.GetValueRK(GETARG_C(cs_.instr_), "rkc")
     };
-    auto result = CreateCall(function, args, "result");
-    auto a = MakeInt(GETARG_A(instr_));
-    auto cmp = builder_.CreateICmpNE(result, a, "cmp");
-    builder_.CreateCondBr(cmp, blocks_[curr_ + 2], blocks_[curr_ + 1]);
+    auto result = cs_.CreateCall(function, args, "result");
+    auto a = cs_.MakeInt(GETARG_A(cs_.instr_));
+    auto cmp = cs_.builder_.CreateICmpNE(result, a, "cmp");
+    auto nextblock = cs_.blocks_[cs_.curr_ + 2];
+    auto jmpblock = cs_.blocks_[cs_.curr_ + 1];
+    cs_.builder_.CreateCondBr(cmp, nextblock, jmpblock);
 }
 
 void Compiler::CompileTest() {
-    auto args = {MakeInt(GETARG_C(instr_)), GetValueR(GETARG_A(instr_), "ra")};
-    auto result = ToBool(CreateCall("lll_test", args, "result"));
-    builder_.CreateCondBr(result, blocks_[curr_ + 2], blocks_[curr_ + 1]);
+    auto args = {
+        cs_.MakeInt(GETARG_C(cs_.instr_)),
+        cs_.GetValueR(GETARG_A(cs_.instr_), "ra")
+    };
+    auto test = cs_.ToBool(cs_.CreateCall("lll_test", args, "test"));
+    auto nextblock = cs_.blocks_[cs_.curr_ + 2];
+    auto jmpblock = cs_.blocks_[cs_.curr_ + 1];
+    cs_.builder_.CreateCondBr(test, nextblock, jmpblock);
 }
 
 void Compiler::CompileTestset() {
-    auto rb = GetValueR(GETARG_B(instr_), "rb");
-    auto args = {MakeInt(GETARG_C(instr_)), rb};
-    auto result = ToBool(CreateCall("lll_test", args, "result"));
-    auto setblock = CreateSubBlock("set");
-    builder_.CreateCondBr(result, blocks_[curr_ + 2], setblock);
-    builder_.SetInsertPoint(setblock);
-    auto ra = GetValueR(GETARG_A(instr_), "ra");
-    SetRegister(ra, rb);
-    builder_.CreateBr(blocks_[curr_ + 1]);
+    auto rb = cs_.GetValueR(GETARG_B(cs_.instr_), "rb");
+    auto args = {cs_.MakeInt(GETARG_C(cs_.instr_)), rb};
+    auto result = cs_.ToBool(cs_.CreateCall("lll_test", args, "result"));
+    auto setblock = cs_.CreateSubBlock("set");
+    cs_.builder_.CreateCondBr(result, cs_.blocks_[cs_.curr_ + 2], setblock);
+    cs_.builder_.SetInsertPoint(setblock);
+    auto ra = cs_.GetValueR(GETARG_A(cs_.instr_), "ra");
+    cs_.SetRegister(ra, rb);
+    cs_.builder_.CreateBr(cs_.blocks_[cs_.curr_ + 1]);
 }
 
 void Compiler::CompileCall() {
-    int a = GETARG_A(instr_);
-    int b = GETARG_B(instr_);
+    int a = GETARG_A(cs_.instr_);
+    int b = GETARG_B(cs_.instr_);
     if (b != 0)
-        SetTop(a + b);
+        cs_.SetTop(a + b);
     auto args = {
-        values_.state,
-        GetValueR(a, "ra"),
-        MakeInt(GETARG_C(instr_) - 1)
+        cs_.values_.state,
+        cs_.GetValueR(a, "ra"),
+        cs_.MakeInt(GETARG_C(cs_.instr_) - 1)
     };
-    CreateCall("luaD_callnoyield", args);
+    cs_.CreateCall("luaD_callnoyield", args);
 }
 
 void Compiler::CompileReturn() {
-    if (proto_->sizep > 0)
-        CreateCall("luaF_close", {values_.state, values_.base});
-    int a = GETARG_A(instr_);
-    int b = GETARG_B(instr_);
+    if (cs_.proto_->sizep > 0)
+        cs_.CreateCall("luaF_close", {cs_.values_.state, cs_.values_.base});
+    int a = GETARG_A(cs_.instr_);
+    int b = GETARG_B(cs_.instr_);
     llvm::Value* nresults = nullptr;
     if (b == 0) {
-        nresults = TopDiff(GETARG_A(instr_));
+        nresults = cs_.TopDiff(GETARG_A(cs_.instr_));
     } else if (b == 1) { 
-        nresults = MakeInt(0);
+        nresults = cs_.MakeInt(0);
     } else {
-        nresults = MakeInt(b - 1);
-        SetTop(a + b - 1);
+        nresults = cs_.MakeInt(b - 1);
+        cs_.SetTop(a + b - 1);
     }
-    builder_.CreateRet(nresults);
+    cs_.builder_.CreateRet(nresults);
 }
 
 void Compiler::CompileForloop() {
-    auto ra = GetValueR(GETARG_A(instr_), "ra");
-    auto jump = ToBool(CreateCall("lll_forloop", {ra}, "jump"));
-    auto jumpblock = blocks_[curr_ + 1 + GETARG_sBx(instr_)];
-    builder_.CreateCondBr(jump, jumpblock, blocks_[curr_ + 1]);
+    auto ra = cs_.GetValueR(GETARG_A(cs_.instr_), "ra");
+    auto jump = cs_.ToBool(cs_.CreateCall("lll_forloop", {ra}, "jump"));
+    auto jumpblock = cs_.blocks_[cs_.curr_ + 1 + GETARG_sBx(cs_.instr_)];
+    cs_.builder_.CreateCondBr(jump, jumpblock, cs_.blocks_[cs_.curr_ + 1]);
 }
 
 void Compiler::CompileForprep() {
-    auto args = {values_.state, GetValueR(GETARG_A(instr_), "ra")};
-    CreateCall("lll_forprep", args);
-    builder_.CreateBr(blocks_[curr_ + 1 + GETARG_sBx(instr_)]);
+    auto args = {cs_.values_.state, cs_.GetValueR(GETARG_A(cs_.instr_), "ra")};
+    cs_.CreateCall("lll_forprep", args);
+    cs_.builder_.CreateBr(cs_.blocks_[cs_.curr_ + 1 + GETARG_sBx(cs_.instr_)]);
 }
 
 void Compiler::CompileTforcall() {
-    int a = GETARG_A(instr_);
+    int a = GETARG_A(cs_.instr_);
     int cb = a + 3;
-    SetRegister(GetValueR(cb + 2, "cb2"), GetValueR(a + 2, "ra2"));
-    SetRegister(GetValueR(cb + 1, "cb1"), GetValueR(a + 1, "ra1"));
-    SetRegister(GetValueR(cb, "cb"), GetValueR(a, "ra"));
-    SetTop(cb + 3);
+    cs_.SetRegister(cs_.GetValueR(cb + 2, "cb2"), cs_.GetValueR(a + 2, "ra2"));
+    cs_.SetRegister(cs_.GetValueR(cb + 1, "cb1"), cs_.GetValueR(a + 1, "ra1"));
+    cs_.SetRegister(cs_.GetValueR(cb, "cb"), cs_.GetValueR(a, "ra"));
+    cs_.SetTop(cb + 3);
     auto args = {
-        values_.state,
-        GetValueR(cb, "cb"),
-        MakeInt(GETARG_C(instr_))
+        cs_.values_.state,
+        cs_.GetValueR(cb, "cb"),
+        cs_.MakeInt(GETARG_C(cs_.instr_))
     };
-    CreateCall("luaD_callnoyield", args);
-    ReloadTop();
+    cs_.CreateCall("luaD_callnoyield", args);
+    cs_.ReloadTop();
 }
 
 void Compiler::CompileTforloop() {
-    int a = GETARG_A(instr_);
-    auto ra1 = GetValueR(a + 1, "ra1");
-    auto tag = LoadField(ra1, MakeIntT(sizeof(int)), offsetof(TValue, tt_),
-            "tag");
-    auto notnil = builder_.CreateICmpNE(tag, MakeInt(LUA_TNIL), "notnil");
-    auto continueblock = CreateSubBlock("continue");
-    builder_.CreateCondBr(notnil, continueblock, blocks_[curr_ + 1]);
+    int a = GETARG_A(cs_.instr_);
+    auto ra1 = cs_.GetValueR(a + 1, "ra1");
+    auto tag = cs_.LoadField(ra1, cs_.rt_.MakeIntT(sizeof(int)),
+            offsetof(TValue, tt_), "tag");
+    auto notnil = cs_.builder_.CreateICmpNE(tag, cs_.MakeInt(LUA_TNIL),
+            "notnil");
+    auto continueblock = cs_.CreateSubBlock("continue");
+    auto jmpblock = cs_.blocks_[cs_.curr_ + 1];
+    cs_.builder_.CreateCondBr(notnil, continueblock, jmpblock);
 
-    builder_.SetInsertPoint(continueblock);
-    auto ra = GetValueR(a, "ra");
-    SetRegister(ra, ra1);
-    builder_.CreateBr(blocks_[curr_ + 1 + GETARG_sBx(instr_)]);
+    cs_.builder_.SetInsertPoint(continueblock);
+    auto ra = cs_.GetValueR(a, "ra");
+    cs_.SetRegister(ra, ra1);
+    cs_.builder_.CreateBr(cs_.blocks_[cs_.curr_ + 1 + GETARG_sBx(cs_.instr_)]);
 }
 
 void Compiler::CompileSetlist() {
 
-    int a = GETARG_A(instr_);
-    int b = GETARG_B(instr_);
-    int c = GETARG_C(instr_);
+    int a = GETARG_A(cs_.instr_);
+    int b = GETARG_B(cs_.instr_);
+    int c = GETARG_C(cs_.instr_);
     if (c == 0)
-        c = GETARG_Ax(proto_->code[curr_ + 1]);
+        c = GETARG_Ax(cs_.proto_->code[cs_.curr_ + 1]);
 
-    auto n = (b != 0 ? MakeInt(b) : TopDiff(a + 1));
-    auto fields = MakeInt((c - 1) * LFIELDS_PER_FLUSH);
+    auto n = (b != 0 ? cs_.MakeInt(b) : cs_.TopDiff(a + 1));
+    auto fields = cs_.MakeInt((c - 1) * LFIELDS_PER_FLUSH);
 
-    auto args = {values_.state, GetValueR(a, "ra"), fields, n};
-    CreateCall("lll_setlist", args);
-    ReloadTop();
+    auto args = {cs_.values_.state, cs_.GetValueR(a, "ra"), fields, n};
+    cs_.CreateCall("lll_setlist", args);
+    cs_.ReloadTop();
 }
 
 void Compiler::CompileClosure() {
     auto args = {
-        values_.state,
-        values_.closure,
-        values_.base,
-        GetValueR(GETARG_A(instr_), "ra"),
-        MakeInt(GETARG_Bx(instr_))
+        cs_.values_.state,
+        cs_.values_.closure,
+        cs_.values_.base,
+        cs_.GetValueR(GETARG_A(cs_.instr_), "ra"),
+        cs_.MakeInt(GETARG_Bx(cs_.instr_))
     };
-    CreateCall("lll_closure", args);
-    CompileCheckcg(GetValueR(GETARG_A(instr_) + 1, "ra1"));
-}
-
-void Compiler::CompileVararg() {
-    // TODO: Create a separate class/module
-    int a = GETARG_A(instr_);
-    int b = GETARG_B(instr_);
-
-    // Create blocks
-    auto entryblock = blocks_[curr_];
-    auto movecheckblock = CreateSubBlock("movecheck");
-    auto moveblock = CreateSubBlock("move", movecheckblock);
-    auto fillcheckblock = CreateSubBlock("fillcheck", moveblock);
-    auto fillblock = CreateSubBlock("fill", fillcheckblock);
-    auto endblock = blocks_[curr_ + 1];
-
-    // Compute 'n' (available arguments)
-    auto func = LoadField(values_.ci, rt_->GetType("TValue"),
-            offsetof(CallInfo, func), "func");
-    auto vadiff = builder_.CreatePtrDiff(values_.base, func, "vadiff");
-    auto vasize = builder_.CreateIntCast(vadiff, MakeIntT(sizeof(int)), false,
-            "vasize");
-    auto n = builder_.CreateSub(vasize, MakeInt(proto_->numparams + 1),
-            "n");
-
-    // if n < 0 then n = 0 end
-    auto nge0 = builder_.CreateICmpSGE(n, MakeInt(0), "n.ge.0");
-    auto nge0int = builder_.CreateIntCast(nge0, MakeIntT(sizeof(int)), false,
-            "n.ge.0_int");
-    auto available = builder_.CreateMul(nge0int, n, "available");
-
-    // Compute 'b' (required arguments)
-    auto required = MakeInt(b - 1);
-    if (b == 0) {
-        required = available;
-        CreateCall("lll_checkstack", {values_.state, available});
-        UpdateStack();
-        auto topidx = builder_.CreateAdd(MakeInt(a), n, "topidx");
-        auto top = builder_.CreateGEP(values_.base, topidx, "top");
-        SetField(values_.state, top, offsetof(lua_State, top), "top");
-    }
-    builder_.CreateBr(movecheckblock);
-
-    // movecheckblock
-    builder_.SetInsertPoint(movecheckblock);
-    auto i = builder_.CreatePHI(MakeIntT(sizeof(int)), 2, "i");
-    i->addIncoming(MakeInt(0), entryblock);
-    i->addIncoming(builder_.CreateAdd(i, MakeInt(1)), moveblock);
-    // TODO: Compare with the smallest value only
-    auto iltrequired = builder_.CreateICmpSLT(i, required, "i.lt.required");
-    auto iltavailable = builder_.CreateICmpSLT(i, available, "i.lt.available");
-    auto cond = builder_.CreateAnd(iltrequired, iltavailable);
-    builder_.CreateCondBr(cond, moveblock, fillcheckblock);
-
-    // moveblock
-    {
-    builder_.SetInsertPoint(moveblock);
-    auto validx = builder_.CreateSub(i, available, "validx");
-    auto val = builder_.CreateGEP(values_.base, validx, "val");
-    auto regidx = builder_.CreateAdd(MakeInt(a), i, "regidx");
-    auto reg = builder_.CreateGEP(values_.base, regidx, "reg");
-    SetRegister(reg, val);
-    builder_.CreateBr(movecheckblock);
-    }
-
-    // fillcheckblock
-    builder_.SetInsertPoint(fillcheckblock);
-    auto j = builder_.CreatePHI(MakeIntT(sizeof(int)), 2, "j");
-    j->addIncoming(i, movecheckblock);
-    j->addIncoming(builder_.CreateAdd(j, MakeInt(1)), fillblock);
-    auto jltrequired = builder_.CreateICmpSLT(j, required, "j.lt.required");
-    builder_.CreateCondBr(jltrequired, fillblock, endblock);
-
-    // fillblock
-    {
-    builder_.SetInsertPoint(fillblock);
-    auto regidx = builder_.CreateAdd(MakeInt(a), j, "regidx");
-    auto reg = builder_.CreateGEP(values_.base, regidx, "reg");
-    SetField(reg, MakeInt(LUA_TNIL), offsetof(TValue, tt_), "tag");
-    builder_.CreateBr(fillcheckblock);
-    }
+    cs_.CreateCall("lll_closure", args);
+    CompileCheckcg(cs_.GetValueR(GETARG_A(cs_.instr_) + 1, "ra1"));
 }
 
 void Compiler::CompileCheckcg(llvm::Value* reg) {
-    auto args = {values_.state, values_.ci, reg};
-    CreateCall("lll_checkcg", args);
-}
-
-llvm::Type* Compiler::MakeIntT(int nbytes) {
-    return llvm::IntegerType::get(context_, 8 * nbytes);
-}
-
-llvm::Value* Compiler::MakeInt(int value) {
-    return llvm::ConstantInt::get(MakeIntT(sizeof(int)), value);
-}
-
-llvm::Value* Compiler::ToBool(llvm::Value* value) {
-    return builder_.CreateICmpNE(value, MakeInt(0), value->getName());
-}
-
-llvm::Value* Compiler::GetFieldPtr(llvm::Value* strukt, llvm::Type* fieldtype,
-        size_t offset, const std::string& name) {
-    auto memt = llvm::PointerType::get(MakeIntT(1), 0);
-    auto mem = builder_.CreateBitCast(strukt, memt, strukt->getName() + "_mem");
-    auto element = builder_.CreateGEP(mem, MakeInt(offset), name + "_mem");
-    auto ptrtype = llvm::PointerType::get(fieldtype, 0);
-    return builder_.CreateBitCast(element, ptrtype, name + "_ptr");
-}
-
-llvm::Value* Compiler::LoadField(llvm::Value* strukt, llvm::Type* fieldtype,
-        size_t offset, const std::string& name) {
-    auto ptr = GetFieldPtr(strukt, fieldtype, offset, name);
-    return builder_.CreateLoad(ptr, name);
-}
-
-void Compiler::SetField(llvm::Value* strukt, llvm::Value* fieldvalue,
-        size_t offset, const std::string& fieldname) {
-    auto ptr = GetFieldPtr(strukt, fieldvalue->getType(), offset,fieldname);
-    builder_.CreateStore(fieldvalue, ptr);
-}
-
-llvm::Value* Compiler::GetValueR(int arg, const std::string& name) {
-    return builder_.CreateGEP(values_.base, MakeInt(arg), name);
-}
-
-llvm::Value* Compiler::GetValueK(int arg, const std::string& name) {
-    auto k = proto_->k + arg;
-    auto intptr = llvm::ConstantInt::get(MakeIntT(sizeof(void*)), (uintptr_t)k);
-    return builder_.CreateIntToPtr(intptr, rt_->GetType("TValue"), name);
-}
-
-llvm::Value* Compiler::GetValueRK(int arg, const std::string& name) {
-    return ISK(arg) ? GetValueK(INDEXK(arg), name) : GetValueR(arg, name);
-}
-
-llvm::Value* Compiler::GetValueRIF(int arg,
-        const std::string& name) {
-    if (ISK(arg)) {
-        int karg = INDEXK(arg);
-        auto k = proto_->k + karg;
-        if (ttisinteger(k)) {
-            auto type = rt_->GetType("lua_Integer");
-            return llvm::ConstantInt::get(type, ivalue(k));
-        } else if (ttisfloat(k)) {
-            auto type = rt_->GetType("lua_Number");
-            return llvm::ConstantFP::get(type, fltvalue(k));
-        } else {
-            return GetValueK(karg, name);
-        }
-    } else {
-         return GetValueR(arg, name);
-    }
-}
-
-const char* Compiler::GetTypeRIF(int arg) {
-    if (ISK(arg)) {
-        auto k = proto_->k + INDEXK(arg);
-        if (ttisinteger(k))
-            return "I";
-        else if (ttisfloat(k))
-            return "F";
-        else
-            return "R";
-    } else {
-        return "R";
-    }
-}
-
-llvm::Value* Compiler::GetUpval(int n) {
-    auto upvals = GetFieldPtr(values_.closure, rt_->GetType("UpVal"),
-            offsetof(LClosure, upvals), "upvals");
-    auto upvalptr = builder_.CreateGEP(upvals, MakeInt(n), "upval");
-    auto upval = builder_.CreateLoad(upvalptr, "upval");
-    return LoadField(upval, rt_->GetType("TValue"), offsetof(UpVal, v), "val");
-}
-
-llvm::Value* Compiler::CreateCall(const std::string& name,
-        std::initializer_list<llvm::Value*> args, const std::string& retname) {
-    auto f = rt_->GetFunction(module_.get(), name);
-    return builder_.CreateCall(f, args, retname);
-}
-
-void Compiler::SetRegister(llvm::Value* reg, llvm::Value* value) {
-    auto indices = {MakeInt(0), MakeInt(0)};
-    auto value_memptr = builder_.CreateGEP(value, indices, "value_memptr");
-    auto value_mem = builder_.CreateLoad(value_memptr, "value_mem"); 
-    auto reg_memptr = builder_.CreateGEP(reg, indices, "reg_memptr");
-    builder_.CreateStore(value_mem, reg_memptr);
-}
-
-void Compiler::UpdateStack() {
-    values_.base = LoadField(values_.ci, rt_->GetType("TValue"),
-            ((uintptr_t)&(((CallInfo*)0)->u.l.base)), "base");
-    // test offsetof(CallInfo, u.l.base)
-}
-
-void Compiler::ReloadTop() {
-    auto top = LoadField(values_.ci, rt_->GetType("TValue"),
-            offsetof(CallInfo, top), "top");
-    SetField(values_.state, top, offsetof(lua_State, top), "top");
-}
-
-void Compiler::SetTop(int reg) {
-    auto top = GetValueR(reg, "top");
-    SetField(values_.state, top, offsetof(lua_State, top), "top");
-}
-
-llvm::Value* Compiler::TopDiff(int n) {
-    auto top = LoadField(values_.state, rt_->GetType("TValue"),
-            offsetof(lua_State, top), "top");
-    auto r = GetValueR(n, "r");
-    auto diff = builder_.CreatePtrDiff(top, r, "diff");
-    return builder_.CreateIntCast(diff, MakeIntT(sizeof(int)), false, "idiff");
-}
-
-llvm::BasicBlock* Compiler::CreateSubBlock(const std::string& suffix,
-            llvm::BasicBlock* preview) {
-    if (!preview)
-        preview = blocks_[curr_];
-    auto name = blocks_[curr_]->getName() + suffix;
-    return llvm::BasicBlock::Create(context_, name, function_, preview);
+    auto args = {cs_.values_.state, cs_.values_.ci, reg};
+    cs_.CreateCall("lll_checkcg", args);
 }
 
 }

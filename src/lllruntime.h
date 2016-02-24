@@ -29,13 +29,16 @@ public:
     // Obtains the function declaration
     llvm::Function* GetFunction(llvm::Module* module, const std::string& name);
 
+    // Makes a llvm int type
+    llvm::Type* MakeIntT(int nbytes);
+
 private:
     Runtime();
     void InitTypes();
     void InitFunctions();
 
     // Adds a named struct type with $size bytes
-    void AddType(const std::string& name, size_t size);
+    void AddStructType(const std::string& name, size_t size);
 
     // Adds a function that can be compiled
     void AddFunction(const std::string& name, llvm::FunctionType* type,
