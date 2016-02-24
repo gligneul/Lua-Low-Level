@@ -13,6 +13,7 @@
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Support/TargetSelect.h>
 
+#include "lllarith.h"
 #include "lllcompiler.h"
 #include "lllengine.h"
 #include "lllruntime.h"
@@ -61,7 +62,7 @@ void Compiler::CompileInstructions() {
         cs_.instr_ = cs_.proto_->code[cs_.curr_];
         cs_.UpdateStack();
         //DebugPrint(luaP_opnames[GET_OPCODE(cs_.instr_)]);
-        switch(GET_OPCODE(cs_.instr_)) {
+        switch (GET_OPCODE(cs_.instr_)) {
             case OP_MOVE:     CompileMove(); break;
             case OP_LOADK:    CompileLoadk(false); break;
             case OP_LOADKX:   CompileLoadk(true); break;
@@ -75,7 +76,11 @@ void Compiler::CompileInstructions() {
             case OP_SETTABLE: CompileSettable(); break;
             case OP_NEWTABLE: CompileNewtable(); break;
             case OP_SELF:     CompileSelf(); break;
+#if 1
+            case OP_ADD:      Arith::Compile(cs_); break;
+#else
             case OP_ADD:      CompileBinop("lll_addrr"); break;
+#endif
             case OP_SUB:      CompileBinop("lll_subrr"); break;
             case OP_MUL:      CompileBinop("lll_mulrr"); break;
             case OP_MOD:      CompileBinop("lll_modrr"); break;

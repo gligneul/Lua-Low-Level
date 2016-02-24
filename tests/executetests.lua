@@ -64,6 +64,7 @@ return function(functions, arguments)
         if not chunk then
             error('can\'t compile chunk: ' .. fstr .. '\nerror: ' .. err)
         end
+        --print(fstr)
         local flua = chunk()
         local flll = chunk()
         lll.compile(flll)

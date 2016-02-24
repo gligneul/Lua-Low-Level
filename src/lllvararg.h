@@ -11,27 +11,32 @@
 #ifndef LLLVARARG_H
 #define LLLVARARG_H
 
+#include <vector>
+
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/Value.h>
 
+#include "lllopcode.h"
+
 namespace lll {
 
-class CompilerState;
-
-class Vararg {
+class Vararg : public Opcode<Vararg> {
 public:
-    // Compiles the opcode
-    static void Compile(CompilerState& cs);
-
-private:
+    // Constructor
     Vararg(CompilerState& cs);
 
-    void ComputeAvailableArgs();
-    void ComputeRequiredArgs();
-    llvm::BasicBlock* ComputeNMoves();
-    llvm::BasicBlock* MoveAvailable(llvm::BasicBlock* entry);
-    void FillRequired(llvm::BasicBlock* entry);
+    // Returns the list of steps
+    std::vector<CompilationStep> GetSteps();
 
+private:
+    // Compilation steps
+    llvm::BasicBlock* ComputeAvailableArgs(llvm::BasicBlock* entry);
+    llvm::BasicBlock* ComputeRequiredArgs(llvm::BasicBlock* entry);
+    llvm::BasicBlock* ComputeNMoves(llvm::BasicBlock* entry);
+    llvm::BasicBlock* MoveAvailable(llvm::BasicBlock* entry);
+    llvm::BasicBlock* FillRequired(llvm::BasicBlock* entry);
+
+    // Retuns the register at ra + offset
     llvm::Value* GetRegisterFromA(llvm::Value* offset);
 
     CompilerState& cs_;

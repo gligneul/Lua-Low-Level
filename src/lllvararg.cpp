@@ -7,7 +7,6 @@
 ** lllvararg.cpp
 */
 
-#include "lllcompilerstate.h"
 #include "lllvararg.h"
 
 extern "C" {
@@ -19,13 +18,6 @@ extern "C" {
 
 namespace lll {
 
-void Vararg::Compile(CompilerState& cs) {
-    Vararg v(cs);
-    v.ComputeAvailableArgs();
-    v.ComputeRequiredArgs();
-    v.FillRequired(v.MoveAvailable(v.ComputeNMoves()));
-}
-
 Vararg::Vararg(CompilerState& cs) :
     cs_(cs),
     available_(nullptr),
@@ -33,7 +25,17 @@ Vararg::Vararg(CompilerState& cs) :
     nmoves_(nullptr) {
 }
 
-void Vararg::ComputeAvailableArgs() {
+std::vector<Vararg::CompilationStep> Vararg::GetSteps() {
+    return {
+        &Vararg::ComputeAvailableArgs,
+        &Vararg::ComputeRequiredArgs,
+        &Vararg::ComputeNMoves,
+        &Vararg::MoveAvailable,
+        &Vararg::FillRequired
+    };
+}
+
+llvm::BasicBlock* Vararg::ComputeAvailableArgs(llvm::BasicBlock* entry) {
     auto func = cs_.LoadField(cs_.values_.ci, cs_.rt_.GetType("TValue"),
             offsetof(CallInfo, func), "func");
     auto vadiff = cs_.builder_.CreatePtrDiff(cs_.values_.base, func, "vadiff");
@@ -42,14 +44,16 @@ void Vararg::ComputeAvailableArgs() {
     auto numparams1 = cs_.MakeInt(cs_.proto_->numparams + 1);
     auto n = cs_.builder_.CreateSub(vasize, numparams1, "n");
 
-    // if n < 0 then n = 0 end
+    // available = max(n, 0)
     auto nge0 = cs_.builder_.CreateICmpSGE(n, cs_.MakeInt(0), "n.ge.0");
     auto nge0int = cs_.builder_.CreateIntCast(nge0,
             cs_.rt_.MakeIntT(sizeof(int)), false, "n.ge.0_int");
     available_ = cs_.builder_.CreateMul(nge0int, n, "available");
+
+    return entry;
 }
 
-void Vararg::ComputeRequiredArgs() {
+llvm::BasicBlock* Vararg::ComputeRequiredArgs(llvm::BasicBlock* entry) {
     int b = GETARG_B(cs_.instr_);
     required_ = cs_.MakeInt(b - 1);
     if (b == 0) {
@@ -59,10 +63,11 @@ void Vararg::ComputeRequiredArgs() {
         auto top = GetRegisterFromA(available_);
         cs_.SetField(cs_.values_.state, top, offsetof(lua_State, top), "top");
     }
+    return entry;
 }
 
-llvm::BasicBlock* Vararg::ComputeNMoves() {
-    auto requiredmin = cs_.CreateSubBlock("requiredmin");
+llvm::BasicBlock* Vararg::ComputeNMoves(llvm::BasicBlock* entry) {
+    auto requiredmin = cs_.CreateSubBlock("requiredmin", entry);
     auto availablemin = cs_.CreateSubBlock("availablemin", requiredmin);
     auto computenmoves = cs_.CreateSubBlock("computenmoves", availablemin);
 
@@ -91,7 +96,6 @@ llvm::BasicBlock* Vararg::MoveAvailable(llvm::BasicBlock* entry) {
     auto move = cs_.CreateSubBlock("move", check);
     auto end = cs_.CreateSubBlock("move.end", move);
 
-    cs_.builder_.SetInsertPoint(entry);
     cs_.builder_.CreateBr(check);
 
     cs_.builder_.SetInsertPoint(check);
@@ -111,12 +115,11 @@ llvm::BasicBlock* Vararg::MoveAvailable(llvm::BasicBlock* entry) {
     return end;
 }
 
-void Vararg::FillRequired(llvm::BasicBlock* entry) {
+llvm::BasicBlock* Vararg::FillRequired(llvm::BasicBlock* entry) {
     auto check = cs_.CreateSubBlock("fill.check", entry);
     auto fill = cs_.CreateSubBlock("fill", check);
-    auto end = cs_.blocks_[cs_.curr_ + 1];
+    auto end = cs_.CreateSubBlock("fill.end", check);
 
-    cs_.builder_.SetInsertPoint(entry);
     cs_.builder_.CreateBr(check);
 
     cs_.builder_.SetInsertPoint(check);
@@ -130,6 +133,8 @@ void Vararg::FillRequired(llvm::BasicBlock* entry) {
     auto r = GetRegisterFromA(j);
     cs_.SetField(r, cs_.MakeInt(LUA_TNIL), offsetof(TValue, tt_), "tag");
     cs_.builder_.CreateBr(check);
+
+    return end;
 }
 
 llvm::Value* Vararg::GetRegisterFromA(llvm::Value* offset) {

@@ -55,6 +55,20 @@ void LLLSelf(lua_State* L, TValue* ra, TValue* rb, TValue* rc) {
     }
 }
 
+int LLLToNumber(const TValue* obj, lua_Number* n) {
+    TValue v;
+    if (ttisnumber(obj)) {
+        *n = nvalue(obj);
+        return 1;
+    } else if (cvt2num(obj) &&
+               luaO_str2num(svalue(obj), &v) == vslen(obj) + 1) {
+        *n = nvalue(&v);
+        return 1;
+    } else {
+        return 0;
+    }
+}
+
 }
 
 static void lll_addrr (lua_State *L, TValue *ra, TValue *rb, TValue *rc) {
@@ -440,18 +454,21 @@ void Runtime::InitFunctions() {
     #define LOADUNOP(function) \
         ADDFUNCTION(function, tvoid, tstate, tvalue, tvalue)
 
-    llvm::Type* tstate = types_["lua_State"];
-    llvm::Type* tclosure = types_["LClosure"];
-    llvm::Type* tvalue = types_["TValue"];
-    llvm::Type* tci = types_["CallInfo"];
-    llvm::Type* ttable = types_["Table"];
-    llvm::Type* tupval = types_["UpVal"];
-    llvm::Type* tvoid = llvm::Type::getVoidTy(context_);
-    llvm::Type* tint = MakeIntT(sizeof(int));
+    auto tstate = types_["lua_State"];
+    auto tclosure = types_["LClosure"];
+    auto tvalue = types_["TValue"];
+    auto tci = types_["CallInfo"];
+    auto ttable = types_["Table"];
+    auto tupval = types_["UpVal"];
+    auto tluanumber = types_["lua_Number"];
+    auto tluanumberptr = llvm::PointerType::get(tluanumber, 0);
+    auto tvoid = llvm::Type::getVoidTy(context_);
+    auto tint = MakeIntT(sizeof(int));
 
     ADDFUNCTION(LLLGetTable, tvoid, tstate, tvalue, tvalue, tvalue);
     ADDFUNCTION(LLLSetTable, tvoid, tstate, tvalue, tvalue, tvalue);
     ADDFUNCTION(LLLSelf, tvoid, tstate, tvalue, tvalue, tvalue);
+    ADDFUNCTION(LLLToNumber, tint, tvalue, tluanumberptr);
 
     LOADBINOP(lll_addrr);
     LOADBINOP(lll_subrr);
@@ -487,6 +504,7 @@ void Runtime::InitFunctions() {
     ADDFUNCTION(luaV_lessequal, tint, tstate, tvalue, tvalue);
     ADDFUNCTION(luaD_callnoyield, tvoid, tstate, tvalue, tint);
     ADDFUNCTION(luaF_close, tvoid, tstate, tvalue);
+    ADDFUNCTION(luaT_trybinTM, tvoid, tstate, tvalue, tvalue, tvalue, tint);
 }
 
 void Runtime::AddStructType(const std::string& name, size_t size) {
