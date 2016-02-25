@@ -29,6 +29,38 @@ extern "C" {
 
 namespace {
 
+#if 0
+/* useful debug function: */
+static void dumpstack (StkId begin, StkId end) {
+  printf("Stack dump:\n");
+  for (StkId o = begin; o != end; ++o) {
+    printf("  %p", o);
+    switch (novariant(ttype(o))) {
+      case LUA_TNIL:
+        printf("  nil\n"); break;
+      case LUA_TBOOLEAN:
+        printf("  boolean: %s\n", bvalue(o) ? "true" : "false"); break;
+      case LUA_TLIGHTUSERDATA:
+        printf("  light user data: %p\n", pvalue(o)); break;
+      case LUA_TNUMBER:
+        printf("  number: %f\n", nvalue(o)); break;
+      case LUA_TSTRING:
+        printf("  string: %s\n", getstr(o)); break;
+      case LUA_TTABLE:
+        printf("  table: %p\n", hvalue(o)); break;
+      case LUA_TFUNCTION:
+        printf("  function: %p\n", clvalue(o)); break;
+      case LUA_TUSERDATA:
+        printf("  heavy user data: %p\n", uvalue(o)); break;
+      case LUA_TTHREAD:
+        printf("  thread: %p\n", thvalue(o)); break;
+      default:
+        printf("  Unknown type: %d\n", ttype(o)); break;
+    }
+  }
+}
+#endif
+
 void LLLGetTable(lua_State* L, TValue* t, TValue* k, TValue* v) {
     const TValue *aux;
     if (luaV_fastget(L, t, k, aux, luaH_get)) {

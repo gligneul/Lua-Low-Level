@@ -77,12 +77,13 @@ void Compiler::CompileInstructions() {
             case OP_NEWTABLE: CompileNewtable(); break;
             case OP_SELF:     CompileSelf(); break;
 #if 1
-            case OP_ADD:      Arith::Compile(cs_); break;
+            case OP_ADD: case OP_SUB: case OP_MUL:
+                              Arith::Compile(cs_); break;
 #else
             case OP_ADD:      CompileBinop("lll_addrr"); break;
-#endif
             case OP_SUB:      CompileBinop("lll_subrr"); break;
             case OP_MUL:      CompileBinop("lll_mulrr"); break;
+#endif
             case OP_MOD:      CompileBinop("lll_modrr"); break;
             case OP_POW:      CompileBinop("lll_powrr"); break;
             case OP_DIV:      CompileBinop("lll_divrr"); break;
@@ -104,7 +105,7 @@ void Compiler::CompileInstructions() {
             case OP_TEST:     CompileTest(); break;
             case OP_TESTSET:  CompileTestset(); break;
             case OP_CALL:     CompileCall(); break;
-            case OP_TAILCALL: CompileCall(); break;
+            case OP_TAILCALL: CompileTailcall(); break;
             case OP_RETURN:   CompileReturn(); break;
             case OP_FORLOOP:  CompileForloop(); break;
             case OP_FORPREP:  CompileForprep(); break;
@@ -356,6 +357,19 @@ void Compiler::CompileCall() {
         cs_.MakeInt(GETARG_C(cs_.instr_) - 1)
     };
     cs_.CreateCall("luaD_callnoyield", args);
+}
+
+void Compiler::CompileTailcall() {
+    // Tailcall returns a negative value that signals the call must be performed
+    if (cs_.proto_->sizep > 0)
+        cs_.CreateCall("luaF_close", {cs_.values_.state, cs_.values_.base});
+    int a = GETARG_A(cs_.instr_);
+    int b = GETARG_B(cs_.instr_);
+    if (b != 0)
+        cs_.SetTop(a + b);
+    auto diff = cs_.TopDiff(a);
+    auto ret = cs_.builder_.CreateNeg(diff, "ret");
+    cs_.builder_.CreateRet(ret);
 }
 
 void Compiler::CompileReturn() {

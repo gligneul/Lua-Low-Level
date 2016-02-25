@@ -71,6 +71,7 @@ private:
     void CompileTest();
     void CompileTestset();
     void CompileCall();
+    void CompileTailcall();
     void CompileReturn();
     void CompileForloop();
     void CompileForprep();

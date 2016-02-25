@@ -390,12 +390,19 @@ int luaD_precall (lua_State *L, StkId func, int nresults) {
 
       /* LLL auto compilation and execution */
       if (LLLGetAutoCompile() && !LLLIsCompiled(p)
-          && ++(p->ncalls) > LLL_CALLS_TO_COMPILE)
+          && ++p->ncalls > LLL_CALLS_TO_COMPILE)
         LLLCompile(L, p, NULL);
       if (p->lllfunction) {
         int n = p->lllfunction(L, clLvalue(func));
-        luaD_poscall(L, ci, L->top - n, n);
-        return 1;
+        if (n < 0) { /* tailcall */
+          n = -n;
+          ci->nresults = n;
+          luaD_poscall(L, ci, L->top - n, n);
+          return luaD_precall(L, L->top - n, nresults);
+        } else {
+          luaD_poscall(L, ci, L->top - n, n);
+          return 1;
+        }
       }
 
       return 0;
