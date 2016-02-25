@@ -77,13 +77,14 @@ void Compiler::CompileInstructions() {
             case OP_NEWTABLE: CompileNewtable(); break;
             case OP_SELF:     CompileSelf(); break;
 #if 1
-            case OP_ADD: case OP_SUB: case OP_MUL:
+            case OP_ADD: case OP_SUB: case OP_MUL: case OP_MOD: case OP_POW:  
+            case OP_DIV: case OP_IDIV: case OP_BAND: case OP_BOR: case OP_BXOR: 
+            case OP_SHL: case OP_SHR:
                               Arith::Compile(cs_); break;
 #else
             case OP_ADD:      CompileBinop("lll_addrr"); break;
             case OP_SUB:      CompileBinop("lll_subrr"); break;
             case OP_MUL:      CompileBinop("lll_mulrr"); break;
-#endif
             case OP_MOD:      CompileBinop("lll_modrr"); break;
             case OP_POW:      CompileBinop("lll_powrr"); break;
             case OP_DIV:      CompileBinop("lll_divrr"); break;
@@ -93,6 +94,7 @@ void Compiler::CompileInstructions() {
             case OP_BXOR:     CompileBinop("lll_bxorrr"); break;
             case OP_SHL:      CompileBinop("lll_shlrr"); break;
             case OP_SHR:      CompileBinop("lll_shrrr"); break;
+#endif
             case OP_UNM:      CompileUnop("lll_unm"); break;
             case OP_BNOT:     CompileUnop("lll_bnot"); break;
             case OP_NOT:      CompileUnop("lll_not"); break;

@@ -54,7 +54,7 @@ llvm::BasicBlock* Arith::ComputeInteger(llvm::BasicBlock* entry) {
     auto ra = cs_.GetValueR(GETARG_A(cs_.instr_), "ra");
     auto ib = LoadInteger(b);
     auto ic = LoadInteger(c);
-    auto result = cs_.builder_.CreateBinOp(GetIntegerBinOp(), ib, ic, "result");
+    auto result = PerformIntOp(ib, ic);
     cs_.SetField(ra, result, offsetof(TValue, value_), "value");
     auto tag = cs_.MakeInt(LUA_TNUMINT);
     cs_.SetField(ra, tag, offsetof(TValue, tt_), "tag");
@@ -86,8 +86,7 @@ llvm::BasicBlock* Arith::ComputeFloat(llvm::BasicBlock* entry) {
 
     cs_.builder_.SetInsertPoint(compute);
     auto ra = cs_.GetValueR(GETARG_A(cs_.instr_), "ra");
-    auto result = cs_.builder_.CreateBinOp(GetFloatBinOp(), fb.second,
-            fc.second, "result");
+    auto result = PerformFloatOp(fb.second, fc.second);
     cs_.SetField(ra, result, offsetof(TValue, value_), "value");
     auto tag = cs_.MakeInt(LUA_TNUMFLT);
     cs_.SetField(ra, tag, offsetof(TValue, tt_), "tag");
@@ -201,54 +200,61 @@ std::pair<llvm::Value*, llvm::Value*> Arith::ConvertToFloat(int v) {
     }
 }
 
-llvm::Instruction::BinaryOps Arith::GetIntegerBinOp() {
+llvm::Value* Arith::PerformIntOp(llvm::Value* lhs, llvm::Value* rhs) {
     switch (GET_OPCODE(cs_.instr_)) {
         case OP_ADD:
-            return llvm::Instruction::Add;
+            return cs_.builder_.CreateAdd(lhs, rhs, "result");
         case OP_SUB:
-            return llvm::Instruction::Sub;
+            return cs_.builder_.CreateSub(lhs, rhs, "result");
         case OP_MUL:
-            return llvm::Instruction::Mul;
+            return cs_.builder_.CreateMul(lhs, rhs, "result");
         case OP_MOD:
-            return llvm::Instruction::SRem;
+            return cs_.CreateCall("luaV_mod", {cs_.values_.state, lhs, rhs},
+                    "result");
         case OP_IDIV:
-            return llvm::Instruction::SDiv;
+            return cs_.CreateCall("luaV_div", {cs_.values_.state, lhs, rhs},
+                    "result");
         case OP_BAND:
-            return llvm::Instruction::And;
+            return cs_.builder_.CreateAnd(lhs, rhs, "result");
         case OP_BOR:
-            return llvm::Instruction::Or;
+            return cs_.builder_.CreateOr(lhs, rhs, "result");
         case OP_BXOR:
-            return llvm::Instruction::Xor;
+            return cs_.builder_.CreateXor(lhs, rhs, "result");
         case OP_SHL:
-            return llvm::Instruction::Shl;
+            return cs_.CreateCall("luaV_shiftl", {lhs, rhs}, "result");
         case OP_SHR:
-            return llvm::Instruction::LShr;
+            return cs_.CreateCall("luaV_shiftl",
+                    {lhs, cs_.builder_.CreateNeg(rhs, "neg.ic")}, "result");
         default:
             break;
     }
     assert(false);
-    return llvm::Instruction::Add;
+    return nullptr;
 }
 
-llvm::Instruction::BinaryOps Arith::GetFloatBinOp() {
+llvm::Value* Arith::PerformFloatOp(llvm::Value* lhs, llvm::Value* rhs) {
     switch (GET_OPCODE(cs_.instr_)) {
         case OP_ADD:
-            return llvm::Instruction::FAdd;
+            return cs_.builder_.CreateFAdd(lhs, rhs, "result");
         case OP_SUB:
-            return llvm::Instruction::FSub;
+            return cs_.builder_.CreateFSub(lhs, rhs, "result");
         case OP_MUL:
-            return llvm::Instruction::FMul;
-        case OP_DIV:
-            return llvm::Instruction::FDiv;
+            return cs_.builder_.CreateFMul(lhs, rhs, "result");
         case OP_MOD:
-            return llvm::Instruction::FRem;
+            return cs_.CreateCall("LLLNumMod", {lhs, rhs}, "results");
+        case OP_POW:
+            return cs_.CreateCall(STRINGFY2(l_mathop(pow)), {lhs, rhs},
+                    "result");
+        case OP_DIV:
+            return cs_.builder_.CreateFDiv(lhs, rhs, "result");
         case OP_IDIV:
-            return llvm::Instruction::FDiv;
+            return cs_.CreateCall(STRINGFY2(l_mathop(floor)),
+                    {cs_.builder_.CreateFDiv(lhs, rhs, "result")}, "floor");
         default:
             break;
     }
     assert(false);
-    return llvm::Instruction::Add;
+    return nullptr;
 }
 
 int Arith::GetMethodTag() {

@@ -33,11 +33,11 @@ private:
     llvm::BasicBlock* ComputeFloat(llvm::BasicBlock* entry);
     llvm::BasicBlock* ComputeTaggedMethod(llvm::BasicBlock* entry);
 
-    // Returns whether the opcode can perform an integer operation
+    // Returns whether the opcode can perform an integer/float operation
     bool HasIntegerOp();
     bool HasFloatOp();
 
-    // Returns whether the value can perform an integer operation
+    // Returns whether the constant can perform an integer/float operation
     bool CanPerformIntegerOp(int v);
     bool CanPerformFloatOp(int v);
 
@@ -47,12 +47,14 @@ private:
     // Obtains the integer value
     llvm::Value* LoadInteger(int v);
 
-    // Returns wheter the value is float and, if it is, returns the fltvalue
+    // Returns wheter the value is float and, if it is, returns it
     std::pair<llvm::Value*, llvm::Value*> ConvertToFloat(int v);
 
-    // Obtains the integer binop instruction
-    llvm::Instruction::BinaryOps GetIntegerBinOp();
-    llvm::Instruction::BinaryOps GetFloatBinOp();
+    // Performs the integer/float binary operation
+    llvm::Value* PerformIntOp(llvm::Value* lhs, llvm::Value* rhs);
+    llvm::Value* PerformFloatOp(llvm::Value* lhs, llvm::Value* rhs);
+    
+    // Obtains the corresponding tag for the opcode
     int GetMethodTag();
 
     CompilerState& cs_;

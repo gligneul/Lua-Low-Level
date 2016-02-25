@@ -101,6 +101,12 @@ int LLLToNumber(const TValue* obj, lua_Number* n) {
     }
 }
 
+lua_Number LLLNumMod(lua_Number lhs, lua_Number rhs) {
+    lua_Number result;
+    luai_nummod(0, lhs, rhs, result);
+    return result;
+}
+
 }
 
 static void lll_addrr (lua_State *L, TValue *ra, TValue *rb, TValue *rc) {
@@ -478,7 +484,7 @@ void Runtime::InitTypes() {
 void Runtime::InitFunctions() {
     #define ADDFUNCTION(function, ret, ...) { \
         auto type = llvm::FunctionType::get(ret, {__VA_ARGS__}, false); \
-        AddFunction(#function, type, reinterpret_cast<void*>(function)); }
+        AddFunction(STRINGFY2(function), type, reinterpret_cast<void*>(function)); }
 
     #define LOADBINOP(function) \
         ADDFUNCTION(function, tvoid, tstate, tvalue, tvalue, tvalue)
@@ -493,14 +499,21 @@ void Runtime::InitFunctions() {
     auto ttable = types_["Table"];
     auto tupval = types_["UpVal"];
     auto tluanumber = types_["lua_Number"];
+    auto tluainteger = types_["lua_Integer"];
     auto tluanumberptr = llvm::PointerType::get(tluanumber, 0);
     auto tvoid = llvm::Type::getVoidTy(context_);
     auto tint = MakeIntT(sizeof(int));
 
+    // LLL
     ADDFUNCTION(LLLGetTable, tvoid, tstate, tvalue, tvalue, tvalue);
     ADDFUNCTION(LLLSetTable, tvoid, tstate, tvalue, tvalue, tvalue);
     ADDFUNCTION(LLLSelf, tvoid, tstate, tvalue, tvalue, tvalue);
     ADDFUNCTION(LLLToNumber, tint, tvalue, tluanumberptr);
+    ADDFUNCTION(LLLNumMod, tluanumber, tluanumber, tluanumber);
+
+    // math.h
+    ADDFUNCTION(l_mathop(pow), tluanumber, tluanumber, tluanumber);
+    ADDFUNCTION(l_mathop(floor), tluanumber, tluanumber);
 
     LOADBINOP(lll_addrr);
     LOADBINOP(lll_subrr);
@@ -528,12 +541,19 @@ void Runtime::InitFunctions() {
     ADDFUNCTION(lll_setlist, tvoid, tstate, tvalue, tint, tint);
     ADDFUNCTION(lll_closure, tvoid, tstate, tclosure, tvalue, tvalue, tint);
     ADDFUNCTION(lll_checkstack, tvoid, tstate, tint);
+
     ADDFUNCTION(luaH_resize, tvoid, tstate, ttable, tint, tint);
     LOADUNOP(luaV_objlen);
+
+    // lvm.h
+    ADDFUNCTION(luaV_mod, tluainteger, tstate, tluainteger, tluainteger);
+    ADDFUNCTION(luaV_div, tluainteger, tstate, tluainteger, tluainteger);
+    ADDFUNCTION(luaV_shiftl, tluainteger, tluainteger, tluainteger);
     ADDFUNCTION(luaV_concat, tvoid, tstate, tint);
     ADDFUNCTION(luaV_equalobj, tint, tstate, tvalue, tvalue);
     ADDFUNCTION(luaV_lessthan, tint, tstate, tvalue, tvalue);
     ADDFUNCTION(luaV_lessequal, tint, tstate, tvalue, tvalue);
+
     ADDFUNCTION(luaD_callnoyield, tvoid, tstate, tvalue, tint);
     ADDFUNCTION(luaF_close, tvoid, tstate, tvalue);
     ADDFUNCTION(luaT_trybinTM, tvoid, tstate, tvalue, tvalue, tvalue, tint);

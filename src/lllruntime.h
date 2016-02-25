@@ -15,6 +15,9 @@
 
 #include <llvm/IR/LLVMContext.h>
 
+#define STRINGFY(a) #a
+#define STRINGFY2(a) STRINGFY(a)
+
 namespace lll {
 
 class Runtime {
