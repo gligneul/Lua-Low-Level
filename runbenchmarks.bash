@@ -25,7 +25,7 @@ function benchmark {
     sum=0
     ts=()
     for i in `seq 1 $n_tests`; do
-        t=$( { TIMEFORMAT='%3R'; time $*; } 2>&1 )
+        t=$( { TIMEFORMAT='%3R'; time $* > /dev/null; } 2>&1 )
         ts[$i]=$t
         sum=`echo "$sum + $t" | bc -l`
     done

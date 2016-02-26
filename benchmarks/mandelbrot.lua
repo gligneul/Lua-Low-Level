@@ -14,6 +14,9 @@ benchmark_util(function()
     local width = 1000
     local height, wscale = width, 2/width
     local m, limit2 = 50, 4.0
+    local write, char = io.write, string.char 
+
+    write("P4\n", width, " ", height, "\n")
 
     for y=0,height-1 do
       local Ci = 2*y / height - 1
@@ -39,6 +42,7 @@ benchmark_util(function()
         if xbb >= width then
           for x=width,xbb do bits = bits + bits + 1 end
         end
+        write(char(255-bits)) 
       end
     end
 end)

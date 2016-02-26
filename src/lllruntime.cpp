@@ -109,136 +109,6 @@ lua_Number LLLNumMod(lua_Number lhs, lua_Number rhs) {
 
 }
 
-static void lll_addrr (lua_State *L, TValue *ra, TValue *rb, TValue *rc) {
-  lua_Number nb, nc;
-  if (ttisinteger(rb) && ttisinteger(rc)) {
-    lua_Integer ib = ivalue(rb);
-    lua_Integer ic = ivalue(rc);
-    setivalue(ra, intop(+, ib, ic));
-  } else if (tonumber(rb, &nb) && tonumber(rc, &nc)) {
-    setfltvalue(ra, luai_numadd(L, nb, nc));
-  } else {
-    luaT_trybinTM(L, rb, rc, ra, TM_ADD);
-  }
-}
-
-static void lll_subrr (lua_State *L, TValue *ra, TValue *rb, TValue *rc) {
-  lua_Number nb, nc;
-  if (ttisinteger(rb) && ttisinteger(rc)) {
-    lua_Integer ib = ivalue(rb);
-    lua_Integer ic = ivalue(rc);
-    setivalue(ra, intop(-, ib, ic));
-  } else if (tonumber(rb, &nb) && tonumber(rc, &nc)) {
-    setfltvalue(ra, luai_numsub(L, nb, nc));
-  } else {
-    luaT_trybinTM(L, rb, rc, ra, TM_SUB);
-  }
-}
-
-static void lll_mulrr (lua_State *L, TValue *ra, TValue *rb, TValue *rc) {
-  lua_Number nb, nc;
-  if (ttisinteger(rb) && ttisinteger(rc)) {
-    lua_Integer ib = ivalue(rb);
-    lua_Integer ic = ivalue(rc);
-    setivalue(ra, intop(*, ib, ic));
-  } else if (tonumber(rb, &nb) && tonumber(rc, &nc)) {
-    setfltvalue(ra, luai_nummul(L, nb, nc));
-  } else {
-    luaT_trybinTM(L, rb, rc, ra, TM_MUL);
-  }
-}
-
-static void lll_divrr (lua_State *L, TValue *ra, TValue *rb, TValue *rc) {
-  lua_Number nb; lua_Number nc;
-  if (tonumber(rb, &nb) && tonumber(rc, &nc)) {
-    setfltvalue(ra, luai_numdiv(L, nb, nc));
-  } else {
-    luaT_trybinTM(L, rb, rc, ra, TM_DIV);
-  }
-}
-
-static void lll_bandrr (lua_State *L, TValue *ra, TValue *rb, TValue *rc) {
-  lua_Integer ib, ic;
-  if (tointeger(rb, &ib) && tointeger(rc, &ic)) {
-    setivalue(ra, intop(&, ib, ic));
-  } else {
-    luaT_trybinTM(L, rb, rc, ra, TM_BAND);
-  }
-}
-
-static void lll_borrr (lua_State *L, TValue *ra, TValue *rb, TValue *rc) {
-  lua_Integer ib, ic;
-  if (tointeger(rb, &ib) && tointeger(rc, &ic)) {
-    setivalue(ra, intop(|, ib, ic));
-  } else {
-    luaT_trybinTM(L, rb, rc, ra, TM_BOR);
-  }
-}
-
-static void lll_bxorrr (lua_State *L, TValue *ra, TValue *rb, TValue *rc) {
-  lua_Integer ib, ic;
-  if (tointeger(rb, &ib) && tointeger(rc, &ic)) {
-    setivalue(ra, intop(^, ib, ic));
-  } else {
-    luaT_trybinTM(L, rb, rc, ra, TM_BXOR);
-  }
-}
-
-static void lll_shlrr (lua_State *L, TValue *ra, TValue *rb, TValue *rc) {
-  lua_Integer ib, ic;
-  if (tointeger(rb, &ib) && tointeger(rc, &ic)) {
-    setivalue(ra, luaV_shiftl(ib, ic));
-  } else {
-    luaT_trybinTM(L, rb, rc, ra, TM_SHL);
-  }
-}
-
-static void lll_shrrr (lua_State *L, TValue *ra, TValue *rb, TValue *rc) {
-  lua_Integer ib, ic;
-  if (tointeger(rb, &ib) && tointeger(rc, &ic)) {
-    setivalue(ra, luaV_shiftl(ib, -ic));
-  } else {
-    luaT_trybinTM(L, rb, rc, ra, TM_SHR);
-  }
-}
-
-static void lll_modrr (lua_State *L, TValue *ra, TValue *rb, TValue *rc) {
-  lua_Number nb; lua_Number nc;
-  if (ttisinteger(rb) && ttisinteger(rc)) {
-    lua_Integer ib = ivalue(rb);
-    lua_Integer ic = ivalue(rc);
-    setivalue(ra, luaV_mod(L, ib, ic));
-  } else if (tonumber(rb, &nb) && tonumber(rc, &nc)){
-    lua_Number m;
-    luai_nummod(L, nb, nc, m);
-    setfltvalue(ra, m);
-  } else {
-    luaT_trybinTM(L, rb, rc, ra, TM_MOD);
-  }
-}
-
-static void lll_idivrr (lua_State *L, TValue *ra, TValue *rb, TValue *rc) {
-  lua_Number nb, nc;
-  if (ttisinteger(rb) && ttisinteger(rc)) {
-    lua_Integer ib = ivalue(rb);
-    lua_Integer ic = ivalue(rc);
-    setivalue(ra, luaV_div(L, ib, ic));
-  } else if (tonumber(rb, &nb) && tonumber(rc, &nc)) {
-    setfltvalue(ra, luai_numidiv(L, nb, nc));
-  } else {
-    luaT_trybinTM(L, rb, rc, ra, TM_IDIV);
-  }
-}
-
-static void lll_powrr (lua_State *L, TValue *ra, TValue *rb, TValue *rc) {
-  lua_Number nb, nc;
-  if (tonumber(rb, &nb) && tonumber(rc, &nc)) {
-    setfltvalue(ra, luai_numpow(L, nb, nc));
-  } else {
-    luaT_trybinTM(L, rb, rc, ra, TM_POW);
-  }
-}
-
 static void lll_unm (lua_State *L, TValue *ra, TValue *rb) {
   lua_Number nb;
   if (ttisinteger(rb)) {
@@ -486,9 +356,6 @@ void Runtime::InitFunctions() {
         auto type = llvm::FunctionType::get(ret, {__VA_ARGS__}, false); \
         AddFunction(STRINGFY2(function), type, reinterpret_cast<void*>(function)); }
 
-    #define LOADBINOP(function) \
-        ADDFUNCTION(function, tvoid, tstate, tvalue, tvalue, tvalue)
-
     #define LOADUNOP(function) \
         ADDFUNCTION(function, tvoid, tstate, tvalue, tvalue)
 
@@ -514,19 +381,6 @@ void Runtime::InitFunctions() {
     // math.h
     ADDFUNCTION(l_mathop(pow), tluanumber, tluanumber, tluanumber);
     ADDFUNCTION(l_mathop(floor), tluanumber, tluanumber);
-
-    LOADBINOP(lll_addrr);
-    LOADBINOP(lll_subrr);
-    LOADBINOP(lll_mulrr);
-    LOADBINOP(lll_divrr);
-    LOADBINOP(lll_bandrr);
-    LOADBINOP(lll_borrr);
-    LOADBINOP(lll_bxorrr);
-    LOADBINOP(lll_shlrr);
-    LOADBINOP(lll_shrrr);
-    LOADBINOP(lll_modrr);
-    LOADBINOP(lll_idivrr);
-    LOADBINOP(lll_powrr);
 
     LOADUNOP(lll_unm);
     LOADUNOP(lll_bnot);
