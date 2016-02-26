@@ -10,6 +10,7 @@
 #include <sstream>
 
 #include <llvm/IR/Constant.h>
+#include <llvm/Support/Host.h>
 
 #include "lllcompilerstate.h"
 
@@ -31,6 +32,7 @@ CompilerState::CompilerState(Proto* proto) :
     blocks_(proto_->sizecode, nullptr),
     builder_(context_),
     curr_(0) {
+    module_->setTargetTriple(llvm::sys::getDefaultTargetTriple());
     CreateBlocks();
 }
 

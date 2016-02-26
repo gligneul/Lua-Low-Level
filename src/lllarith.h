@@ -33,6 +33,9 @@ private:
     llvm::BasicBlock* ComputeFloat(llvm::BasicBlock* entry);
     llvm::BasicBlock* ComputeTaggedMethod(llvm::BasicBlock* entry);
 
+    // If the value is a register obtains it value, if not, returns null
+    llvm::Value* GetRegister(int id, const char* name);
+
     // Returns whether the opcode can perform an integer/float operation
     bool HasIntegerOp();
     bool HasFloatOp();
@@ -42,13 +45,14 @@ private:
     bool CanPerformFloatOp(int v);
 
     // Returns whether the value is integer
-    llvm::Value* IsInteger(int v);
+    llvm::Value* IsInteger(int v, llvm::Value* reg);
 
     // Obtains the integer value
-    llvm::Value* LoadInteger(int v);
+    llvm::Value* LoadInteger(int v, llvm::Value* reg);
 
     // Returns wheter the value is float and, if it is, returns it
-    std::pair<llvm::Value*, llvm::Value*> ConvertToFloat(int v);
+    std::pair<llvm::Value*, llvm::Value*> ConvertToFloat(int v,
+            llvm::Value* reg);
 
     // Performs the integer/float binary operation
     llvm::Value* PerformIntOp(llvm::Value* lhs, llvm::Value* rhs);
@@ -58,6 +62,9 @@ private:
     int GetMethodTag();
 
     CompilerState& cs_;
+    llvm::Value* ra_;
+    llvm::Value* rb_;
+    llvm::Value* rc_;
 };
 
 }

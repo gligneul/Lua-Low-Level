@@ -36,7 +36,7 @@ void Engine::Write(const std::string& path) {
     std::string module_str;
     llvm::raw_string_ostream module_os(module_str);
     module_->print(module_os, nullptr);
-    auto filename = path + ".bc";
+    auto filename = path + ".ll";
     std::ofstream fout(filename);
     if (fout.is_open()) {
         fout << module_str;

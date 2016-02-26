@@ -20,7 +20,10 @@ extern "C" {
 namespace lll {
 
 Arith::Arith(CompilerState& cs) :
-    cs_(cs) {
+    cs_(cs),
+    ra_(GetRegister(GETARG_A(cs_.instr_), "ra")),
+    rb_(GetRegister(GETARG_B(cs_.instr_), "rb")),
+    rc_(GetRegister(GETARG_C(cs_.instr_), "rc")) {
 }
 
 std::vector<Arith::CompilationStep> Arith::GetSteps() {
@@ -45,15 +48,15 @@ llvm::BasicBlock* Arith::ComputeInteger(llvm::BasicBlock* entry) {
     auto failed = cs_.CreateSubBlock("int.failed", compute);
     auto end = cs_.blocks_[cs_.curr_ + 1];
 
-    cs_.builder_.CreateCondBr(IsInteger(b), checkc, failed);
+    cs_.builder_.CreateCondBr(IsInteger(b, rb_), checkc, failed);
 
     cs_.builder_.SetInsertPoint(checkc);
-    cs_.builder_.CreateCondBr(IsInteger(c), compute, failed);
+    cs_.builder_.CreateCondBr(IsInteger(c, rc_), compute, failed);
 
     cs_.builder_.SetInsertPoint(compute);
     auto ra = cs_.GetValueR(GETARG_A(cs_.instr_), "ra");
-    auto ib = LoadInteger(b);
-    auto ic = LoadInteger(c);
+    auto ib = LoadInteger(b, rb_);
+    auto ic = LoadInteger(c, rc_);
     auto result = PerformIntOp(ib, ic);
     cs_.SetField(ra, result, offsetof(TValue, value_), "value");
     auto tag = cs_.MakeInt(LUA_TNUMINT);
@@ -77,11 +80,11 @@ llvm::BasicBlock* Arith::ComputeFloat(llvm::BasicBlock* entry) {
     auto failed = cs_.CreateSubBlock("float.failed", compute);
     auto end = cs_.blocks_[cs_.curr_ + 1];
 
-    auto fb = ConvertToFloat(b);
+    auto fb = ConvertToFloat(b, rb_);
     cs_.builder_.CreateCondBr(fb.first, checkc, failed);
 
     cs_.builder_.SetInsertPoint(checkc);
-    auto fc = ConvertToFloat(c);
+    auto fc = ConvertToFloat(c, rc_);
     cs_.builder_.CreateCondBr(fc.first, compute, failed);
 
     cs_.builder_.SetInsertPoint(compute);
@@ -98,13 +101,20 @@ llvm::BasicBlock* Arith::ComputeFloat(llvm::BasicBlock* entry) {
 llvm::BasicBlock* Arith::ComputeTaggedMethod(llvm::BasicBlock* entry) {
     auto args = {
         cs_.values_.state,
-        cs_.GetValueRK(GETARG_B(cs_.instr_), "rkb"),
-        cs_.GetValueRK(GETARG_C(cs_.instr_), "rkc"),
-        cs_.GetValueR(GETARG_A(cs_.instr_), "ra"),
+        rb_ ? rb_ : cs_.GetValueRK(GETARG_B(cs_.instr_), "kb"),
+        rc_ ? rc_ : cs_.GetValueRK(GETARG_C(cs_.instr_), "kc"),
+        ra_,
         cs_.MakeInt(GetMethodTag())
     };
     cs_.CreateCall("luaT_trybinTM", args);
     return entry;
+}
+
+llvm::Value* Arith::GetRegister(int id, const char* name) {
+    if (ISK(id))
+        return nullptr;
+    else
+        return cs_.GetValueR(id, name);
 }
 
 bool Arith::HasIntegerOp() {
@@ -149,29 +159,28 @@ bool Arith::CanPerformFloatOp(int v) {
     }
 }
 
-llvm::Value* Arith::IsInteger(int v) {
+llvm::Value* Arith::IsInteger(int v, llvm::Value* reg) {
     if (ISK(v)) {
         return llvm::ConstantInt::getTrue(cs_.context_);
     } else {
-        auto r = cs_.GetValueR(v, "r");
-        auto tag = cs_.LoadField(r, cs_.rt_.MakeIntT(sizeof(int)),
+        auto tag = cs_.LoadField(reg, cs_.rt_.MakeIntT(sizeof(int)),
                 offsetof(TValue, tt_), "tag");
         return cs_.builder_.CreateICmpEQ(tag, cs_.MakeInt(LUA_TNUMINT));
     }
 }
 
-llvm::Value* Arith::LoadInteger(int v) {
+llvm::Value* Arith::LoadInteger(int v, llvm::Value* reg) {
     auto intt = cs_.rt_.GetType("lua_Integer");
     if (ISK(v)) {
         auto k = cs_.proto_->k + INDEXK(v);
         return llvm::ConstantInt::get(intt, ivalue(k));
     } else {
-        auto r = cs_.GetValueR(v, "r");
-        return cs_.LoadField(r, intt, offsetof(TValue, value_), "v");
+        return cs_.LoadField(reg, intt, offsetof(TValue, value_), "value");
     }
 }
 
-std::pair<llvm::Value*, llvm::Value*> Arith::ConvertToFloat(int v) {
+std::pair<llvm::Value*, llvm::Value*> Arith::ConvertToFloat(int v,
+        llvm::Value* reg) {
     auto floatt = cs_.rt_.GetType("lua_Number");
     if (ISK(v)) {
         auto k = cs_.proto_->k + INDEXK(v);
@@ -189,9 +198,8 @@ std::pair<llvm::Value*, llvm::Value*> Arith::ConvertToFloat(int v) {
             llvm::ConstantFP::get(floatt, n)
         };
     } else {
-        auto r = cs_.GetValueRK(v, "r");
         auto n = cs_.values_.luanumber;
-        auto isfloat = cs_.CreateCall("LLLToNumber", {r, n}, "is.float");
+        auto isfloat = cs_.CreateCall("LLLToNumber", {reg, n}, "is.float");
         auto boolt = llvm::Type::getInt1Ty(cs_.context_);
         return {
             cs_.builder_.CreateIntCast(isfloat, boolt, false),
@@ -241,7 +249,7 @@ llvm::Value* Arith::PerformFloatOp(llvm::Value* lhs, llvm::Value* rhs) {
         case OP_MUL:
             return cs_.builder_.CreateFMul(lhs, rhs, "result");
         case OP_MOD:
-            return cs_.CreateCall("LLLNumMod", {lhs, rhs}, "results");
+            return cs_.CreateCall("LLLNumMod", {lhs, rhs}, "result");
         case OP_POW:
             return cs_.CreateCall(STRINGFY2(l_mathop(pow)), {lhs, rhs},
                     "result");

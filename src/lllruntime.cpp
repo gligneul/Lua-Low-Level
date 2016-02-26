@@ -89,8 +89,11 @@ void LLLSelf(lua_State* L, TValue* ra, TValue* rb, TValue* rc) {
 
 int LLLToNumber(const TValue* obj, lua_Number* n) {
     TValue v;
-    if (ttisnumber(obj)) {
-        *n = nvalue(obj);
+    if (ttisfloat(obj)) {
+        *n = fltvalue(obj);
+        return 1;
+    } else if (ttisinteger(obj)) {
+        *n = cast_num(ivalue(obj));
         return 1;
     } else if (cvt2num(obj) &&
                luaO_str2num(svalue(obj), &v) == vslen(obj) + 1) {
