@@ -7,7 +7,7 @@ local benchmark_util = require 'benchmarks/util'
 
 benchmark_util(function()
 
-local N = tonumber(arg[1] or 8)    -- board size
+local N = tonumber(11)    -- board size
 
 lll.setautocompile(false)
 

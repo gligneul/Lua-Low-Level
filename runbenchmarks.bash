@@ -11,16 +11,13 @@
 n_tests=25
 
 modules_prefix='benchmarks/'
-# This tests are disable because LLL lacks support for proper tail call
-#    'ack.lua 8 2'
-#    'fixpoint_fact.lua 90'
 modules=(
     'heapsort.lua'
     'increment.lua'
     'loopsum.lua'
     'mandelbrot.lua'
     'matmul.lua'
-    'queen.lua 11'
+    'queen.lua'
     'sudoku.lua'
 )
 
@@ -51,7 +48,7 @@ echo ""
 for m in "${modules[@]}"; do
     path="$modules_prefix""$m""$modules_suffix"
     luatime=`benchmark ./src/lua $path`
-    llltime=`benchmark ./src/lua $path --lll-compile`
+    llltime=`benchmark ./src/lua $path --lll`
     echo "Module: $path"
     echo "     avg        stddev"
     echo "Lua: $luatime"

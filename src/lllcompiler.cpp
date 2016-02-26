@@ -61,7 +61,7 @@ void Compiler::CompileInstructions() {
         cs_.builder_.SetInsertPoint(cs_.blocks_[cs_.curr_]);
         cs_.instr_ = cs_.proto_->code[cs_.curr_];
         cs_.UpdateStack();
-        //DebugPrint(luaP_opnames[GET_OPCODE(cs_.instr_)]);
+        //cs_.DebugPrint(luaP_opnames[GET_OPCODE(cs_.instr_)]);
         switch (GET_OPCODE(cs_.instr_)) {
             case OP_MOVE:     CompileMove(); break;
             case OP_LOADK:    CompileLoadk(false); break;
@@ -76,7 +76,7 @@ void Compiler::CompileInstructions() {
             case OP_SETTABLE: CompileSettable(); break;
             case OP_NEWTABLE: CompileNewtable(); break;
             case OP_SELF:     CompileSelf(); break;
-#if 1
+#if 0
             case OP_ADD: case OP_SUB: case OP_MUL: case OP_MOD: case OP_POW:  
             case OP_DIV: case OP_IDIV: case OP_BAND: case OP_BOR: case OP_BXOR: 
             case OP_SHL: case OP_SHR:

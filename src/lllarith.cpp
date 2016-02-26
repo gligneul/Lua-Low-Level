@@ -190,7 +190,7 @@ std::pair<llvm::Value*, llvm::Value*> Arith::ConvertToFloat(int v) {
         };
     } else {
         auto r = cs_.GetValueRK(v, "r");
-        auto n = cs_.builder_.CreateAlloca(floatt, nullptr, "nmem");
+        auto n = cs_.values_.luanumber;
         auto isfloat = cs_.CreateCall("LLLToNumber", {r, n}, "is.float");
         auto boolt = llvm::Type::getInt1Ty(cs_.context_);
         return {

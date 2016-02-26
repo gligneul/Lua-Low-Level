@@ -1,0 +1,46 @@
+Distro: Fedora release 22 (Twenty Two)
+Kernel: 4.1.10-200.fc22.x86_64
+CPU:    Intel(R) Core(TM) i3-2100 CPU @ 3.10GHz
+
+Module: benchmarks/heapsort.lua
+     avg        stddev
+Lua: 0.11032	0.01731	(15.69091%)
+LLL: 0.08360	0.01526	(18.25225%)
+     0.758 time
+
+Module: benchmarks/increment.lua
+     avg        stddev
+Lua: 1.10124	0.01663	(1.51025%)
+LLL: 0.67896	0.01847	(2.72060%)
+     0.617 time
+
+Module: benchmarks/loopsum.lua
+     avg        stddev
+Lua: 1.09420	0.01668	(1.52402%)
+LLL: 0.68536	0.01635	(2.38598%)
+     0.626 time
+
+Module: benchmarks/mandelbrot.lua
+     avg        stddev
+Lua: 3.02388	0.02111	(0.69822%)
+LLL: 1.16416	0.07590	(6.51963%)
+     0.385 time
+
+Module: benchmarks/matmul.lua
+     avg        stddev
+Lua: 1.16864	0.01887	(1.61431%)
+LLL: 0.90304	0.03655	(4.04702%)
+     0.773 time
+
+Module: benchmarks/queen.lua
+     avg        stddev
+Lua: 1.28776	0.02069	(1.60641%)
+LLL: 0.57692	0.03153	(5.46574%)
+     0.448 time
+
+Module: benchmarks/sudoku.lua
+     avg        stddev
+Lua: 0.79688	0.01394	(1.74911%)
+LLL: 0.52316	0.01694	(3.23760%)
+     0.657 time
+

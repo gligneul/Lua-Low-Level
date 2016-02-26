@@ -53,6 +53,8 @@ void CompilerState::CreateBlocks() {
     builder_.SetInsertPoint(entry);
     values_.ci = LoadField(values_.state, rt_.GetType("CallInfo"),
             offsetof(lua_State, ci), "ci");
+    values_.luanumber = builder_.CreateAlloca(rt_.GetType("lua_Number"), 
+            nullptr, "luanumber");
 
     for (size_t i = 0; i < blocks_.size(); ++i) {
         auto instruction = luaP_opnames[GET_OPCODE(proto_->code[i])];

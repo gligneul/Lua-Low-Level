@@ -7,7 +7,7 @@
 
 return function(f)
     lll.setautocompile(false)
-    if arg[1] == '--lll-compile' then
+    if arg[1] == '--lll' then
         assert(lll.compile(f))
     end
     f()
