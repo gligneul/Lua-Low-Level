@@ -12,6 +12,7 @@ n_tests=25
 
 modules_prefix='benchmarks/'
 modules=(
+    'floatarith.lua'
     'heapsort.lua'
     'increment.lua'
     'loopsum.lua'

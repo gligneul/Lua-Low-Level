@@ -17,10 +17,11 @@
 
 namespace lll {
 
-Engine::Engine(llvm::ExecutionEngine* ee, llvm::Module* module) :
+Engine::Engine(llvm::ExecutionEngine* ee, llvm::Module* module,
+        llvm::Function* function) :
     ee_(ee),
     module_(module),
-    function_(ee->getPointerToNamedFunction("lll")) {
+    function_(ee->getPointerToFunction(function)) {
 }
 
 void* Engine::GetFunction() {

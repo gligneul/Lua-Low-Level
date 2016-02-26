@@ -18,7 +18,8 @@ namespace lll {
 
 class Engine {
 public:
-    Engine(llvm::ExecutionEngine* ee, llvm::Module* module);
+    Engine(llvm::ExecutionEngine* ee, llvm::Module* module,
+            llvm::Function* function);
 
     // Gets the compiled function
     void* GetFunction();

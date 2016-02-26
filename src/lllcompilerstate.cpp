@@ -38,8 +38,10 @@ llvm::Function* CompilerState::CreateMainFunction() {
     auto ret = rt_.MakeIntT(sizeof(int));
     auto params = {rt_.GetType("lua_State"), rt_.GetType("LClosure")};
     auto type = llvm::FunctionType::get(ret, params, false);
+    std::stringstream name;
+    name << "lll" << static_cast<void*>(proto_);
     return llvm::Function::Create(type, llvm::Function::ExternalLinkage,
-            "lll", module_.get());
+            name.str(), module_.get());
 }
 
 void CompilerState::CreateBlocks() {

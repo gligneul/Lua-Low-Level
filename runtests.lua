@@ -35,4 +35,5 @@ for _, m in pairs(modules) do
     dofile(file)
     print('        passed!')
 end
+print('all passed!')
 

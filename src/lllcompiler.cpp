@@ -8,10 +8,17 @@
 */
 
 #include <llvm/ADT/StringRef.h>
-#include <llvm/ExecutionEngine/MCJIT.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Support/TargetSelect.h>
+
+#define LLL_USE_MCJIT
+
+#ifdef LLL_USE_MCJIT
+#include <llvm/ExecutionEngine/MCJIT.h>
+#else
+#include <llvm/ExecutionEngine/JIT.h>
+#endif
 
 #include "lllarith.h"
 #include "lllcompiler.h"
@@ -122,11 +129,15 @@ bool Compiler::CreateEngine() {
             .setErrorStr(&error_)
             .setOptLevel(OPT_LEVEL)
             .setEngineKind(llvm::EngineKind::JIT)
+#ifdef LLL_USE_MCJIT
             .setUseMCJIT(true)
+#else
+            .setUseMCJIT(false)
+#endif
             .create();
     if (engine) {
         engine->finalizeObject();
-        engine_.reset(new Engine(engine, module));
+        engine_.reset(new Engine(engine, module, cs_.function_));
         return true;
     } else {
         return false;
