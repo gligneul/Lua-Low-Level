@@ -4,7 +4,7 @@
 ** Author: Gabriel de Quadros Ligneul
 ** Copyright Notice for LLL: see lllcore.h
 **
-** lllarith.h
+** lllarith.cpp
 ** Compiles the arithmetics opcodes
 */
 

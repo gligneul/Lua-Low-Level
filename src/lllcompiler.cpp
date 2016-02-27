@@ -23,6 +23,7 @@
 #include "lllarith.h"
 #include "lllcompiler.h"
 #include "lllengine.h"
+#include "llllogical.h"
 #include "lllruntime.h"
 #include "lllvararg.h"
 
@@ -84,9 +85,10 @@ void Compiler::CompileInstructions() {
             case OP_NEWTABLE: CompileNewtable(); break;
             case OP_SELF:     CompileSelf(); break;
             case OP_ADD: case OP_SUB: case OP_MUL: case OP_MOD: case OP_POW:  
-            case OP_DIV: case OP_IDIV: case OP_BAND: case OP_BOR: case OP_BXOR: 
-            case OP_SHL: case OP_SHR:
+            case OP_DIV: case OP_IDIV: 
                               Arith::Compile(cs_); break;
+            case OP_BAND: case OP_BOR: case OP_BXOR: case OP_SHL: case OP_SHR:
+                              Logical::Compile(cs_); break;
             case OP_UNM:      CompileUnop("lll_unm"); break;
             case OP_BNOT:     CompileUnop("lll_bnot"); break;
             case OP_NOT:      CompileUnop("lll_not"); break;
