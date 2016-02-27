@@ -114,7 +114,8 @@ public:
         llvm::Value* ci;
         llvm::Value* k;
         llvm::Value* base;
-        llvm::Value* luanumber;
+        llvm::Value* bnumber;
+        llvm::Value* cnumber;
     } values_;
     int curr_;
     Instruction instr_;

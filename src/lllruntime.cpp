@@ -1,4 +1,4 @@
-    /*
+/*
 ** LLL - Lua Low Level
 ** September, 2015
 ** Author: Gabriel de Quadros Ligneul
@@ -89,14 +89,7 @@ void LLLSelf(lua_State* L, TValue* ra, TValue* rb, TValue* rc) {
 
 int LLLToNumber(const TValue* obj, lua_Number* n) {
     TValue v;
-    if (ttisfloat(obj)) {
-        *n = fltvalue(obj);
-        return 1;
-    } else if (ttisinteger(obj)) {
-        *n = cast_num(ivalue(obj));
-        return 1;
-    } else if (cvt2num(obj) &&
-               luaO_str2num(svalue(obj), &v) == vslen(obj) + 1) {
+    if (cvt2num(obj) && luaO_str2num(svalue(obj), &v) == vslen(obj) + 1) {
         *n = nvalue(&v);
         return 1;
     } else {
@@ -373,12 +366,13 @@ void Runtime::InitFunctions() {
     auto tluanumberptr = llvm::PointerType::get(tluanumber, 0);
     auto tvoid = llvm::Type::getVoidTy(context_);
     auto tint = MakeIntT(sizeof(int));
+    auto tbool = llvm::Type::getInt1Ty(context_);
 
     // LLL
     ADDFUNCTION(LLLGetTable, tvoid, tstate, tvalue, tvalue, tvalue);
     ADDFUNCTION(LLLSetTable, tvoid, tstate, tvalue, tvalue, tvalue);
     ADDFUNCTION(LLLSelf, tvoid, tstate, tvalue, tvalue, tvalue);
-    ADDFUNCTION(LLLToNumber, tint, tvalue, tluanumberptr);
+    ADDFUNCTION(LLLToNumber, tbool, tvalue, tluanumberptr);
     ADDFUNCTION(LLLNumMod, tluanumber, tluanumber, tluanumber);
 
     // math.h

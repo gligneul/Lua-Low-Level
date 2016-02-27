@@ -17,8 +17,7 @@
 namespace llvm {class Value;}
 
 extern "C" {
-#include "lprefix.h"
-#include "lobject.h"
+struct lua_TValue;
 }
 
 namespace lll {
@@ -55,7 +54,7 @@ private:
     bool isk_;
     union {
         llvm::Value* r;
-        TValue* k;
+        struct lua_TValue* k;
     } u_;
 };
 
