@@ -33,8 +33,18 @@ MYCFLAGS= `llvm-config --cflags | sed -e 's/-DNDEBUG//' -e 's/-O.//'`
 MYCXXFLAGS= $(MYCFLAGS)
 MYLDFLAGS= `llvm-config --ldflags`
 MYLIBS= `llvm-config --libs all --system-libs`
-MYOBJS= lllarith.o lllcompiler.o lllcompilerstate.o lllcore.o lllengine.o \
-	llllib.o llllogical.o lllruntime.o lllvalue.o lllvararg.o
+MYOBJS= \
+	lllarith.o \
+	lllcompiler.o \
+	lllcompilerstate.o \
+	lllcore.o \
+	lllengine.o \
+	llllib.o \
+	llllogical.o \
+	lllruntime.o \
+	llltableget.o \
+	lllvalue.o \
+	lllvararg.o 
 
 # == END OF USER SETTINGS -- NO NEED TO CHANGE ANYTHING BELOW THIS LINE =======
 

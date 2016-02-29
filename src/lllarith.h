@@ -47,7 +47,6 @@ private:
     // Obtains the corresponding tag for the opcode
     int GetMethodTag();
 
-    CompilerState& cs_;
     llvm::Value* ra_;
     Value b_;
     Value c_;

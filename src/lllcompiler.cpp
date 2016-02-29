@@ -25,6 +25,8 @@
 #include "lllengine.h"
 #include "llllogical.h"
 #include "lllruntime.h"
+#include "llltableget.h"
+#include "lllvalue.h"
 #include "lllvararg.h"
 
 extern "C" {
@@ -39,8 +41,8 @@ extern "C" {
 
 namespace lll {
 
-Compiler::Compiler(Proto* proto) :
-    cs_(proto),
+Compiler::Compiler(lua_State* L, Proto* proto) :
+    cs_(L, proto),
     engine_(nullptr) {
     static bool init = true;
     if (init) {
@@ -196,13 +198,10 @@ void Compiler::CompileGettabup() {
 }
 
 void Compiler::CompileGettable() {
-    auto args = {
-        cs_.values_.state,
-        cs_.GetValueR(GETARG_B(cs_.instr_), "rb"),
-        cs_.GetValueRK(GETARG_C(cs_.instr_), "rkc"),
-        cs_.GetValueR(GETARG_A(cs_.instr_), "ra")
-    };
-    cs_.CreateCall("LLLGetTable", args);
+    Value table(cs_, GETARG_B(cs_.instr_), "rb");
+    Value key(cs_, GETARG_C(cs_.instr_), "rkc");
+    Value dest(cs_, GETARG_A(cs_.instr_), "ra");
+    TableGet::Compile(cs_, table, key, dest);
 }
 
 void Compiler::CompileSettabup() {

@@ -27,7 +27,7 @@ public:
             llvm::CodeGenOpt::Aggressive;
 
     // Constructor, receiver the proto that will be compiled
-    Compiler(Proto* proto);
+    Compiler(lua_State* L, Proto* proto);
 
     // Starts the function compilation
     // Returns false if it fails

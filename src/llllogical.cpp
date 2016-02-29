@@ -19,7 +19,7 @@ extern "C" {
 namespace lll {
 
 Logical::Logical(CompilerState& cs) :
-    cs_(cs),
+    Opcode(cs),
     ra_(cs_.GetValueR(GETARG_A(cs_.instr_), "ra")),
     b_(cs, GETARG_B(cs_.instr_), "rb", Value::STRING_TO_FLOAT),
     c_(cs, GETARG_C(cs_.instr_), "rc", Value::STRING_TO_FLOAT) {

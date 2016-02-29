@@ -22,21 +22,25 @@
 
 extern "C" {
 #include "llimits.h"
-}
 
 struct Proto;
+struct lua_State;
+}
 
 namespace lll {
 
 class CompilerState {
 public:
-    CompilerState(Proto* proto);
+    CompilerState(lua_State* L, Proto* proto);
 
     // Makes a llvm int value
-    llvm::Value* MakeInt(int value);
+    llvm::Value* MakeInt(int value = sizeof(int));
 
     // Converts an int to boolean
     llvm::Value* ToBool(llvm::Value* value);
+
+    // Injects a pointer from host to jit
+    llvm::Value* InjectPointer(llvm::Type* type, void* ptr);
 
     // Obtains the pointer to the field at $offset
     llvm::Value* GetFieldPtr(llvm::Value* strukt, llvm::Type* fieldtype,
@@ -101,6 +105,7 @@ public:
         builder_.CreateCall(function, callargs);
     }
 
+    lua_State* L_;
     Proto* proto_;
     llvm::LLVMContext& context_;
     Runtime& rt_;

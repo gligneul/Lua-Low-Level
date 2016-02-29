@@ -7,8 +7,6 @@
 ** runtime.cpp
 */
 
-#include <cstdio>
-
 #include <llvm/Support/DynamicLibrary.h>
 #include <llvm/IR/DerivedTypes.h>
 #include <llvm/IR/Function.h>
@@ -305,15 +303,13 @@ Runtime* Runtime::Instance() {
 }
 
 llvm::Type* Runtime::GetType(const std::string& name) {
-    assert(types_.find(name) != types_.end() ||
-           (fprintf(stderr, "Not found: %s\n", name.c_str()), 0));
+    AssertKeyExists(types_, name);
     return types_[name];
 }
 
 llvm::Function* Runtime::GetFunction(llvm::Module* module,
                                      const std::string& name) {
-    assert(functions_.find(name) != functions_.end() ||
-           (fprintf(stderr, "Not found: %s\n", name.c_str()), 0));
+    AssertKeyExists(functions_, name);
     auto function = module->getFunction(name);
     if (!function)
         function = llvm::Function::Create(functions_[name],
@@ -328,6 +324,7 @@ llvm::Type* Runtime::MakeIntT(int nbytes) {
 void Runtime::InitTypes() {
     #define ADDTYPE(T) AddStructType(#T, sizeof(T))
 
+    ADDTYPE(global_State);
     ADDTYPE(lua_State);
     ADDTYPE(CallInfo);
     ADDTYPE(TValue);
@@ -335,6 +332,7 @@ void Runtime::InitTypes() {
     ADDTYPE(Proto);
     ADDTYPE(UpVal);
     ADDTYPE(Table);
+    ADDTYPE(TString);
 
     types_["lua_Integer"] = MakeIntT(sizeof(lua_Integer));
 
@@ -350,16 +348,18 @@ void Runtime::InitTypes() {
 void Runtime::InitFunctions() {
     #define ADDFUNCTION(function, ret, ...) { \
         auto type = llvm::FunctionType::get(ret, {__VA_ARGS__}, false); \
-        AddFunction(STRINGFY2(function), type, reinterpret_cast<void*>(function)); }
+        auto funcptr = reinterpret_cast<void*>(function); \
+        AddFunction(STRINGFY2(function), type, funcptr); }
 
     #define LOADUNOP(function) \
-        ADDFUNCTION(function, tvoid, tstate, tvalue, tvalue)
+        ADDFUNCTION(function, tvoid, tstate, ttvalue, ttvalue)
 
     auto tstate = types_["lua_State"];
     auto tclosure = types_["LClosure"];
-    auto tvalue = types_["TValue"];
+    auto ttvalue = types_["TValue"];
     auto tci = types_["CallInfo"];
     auto ttable = types_["Table"];
+    auto ttstring = types_["TString"];
     auto tupval = types_["UpVal"];
     auto tluanumber = types_["lua_Number"];
     auto tluainteger = types_["lua_Integer"];
@@ -369,45 +369,58 @@ void Runtime::InitFunctions() {
     auto tbool = llvm::Type::getInt1Ty(context_);
 
     // LLL
-    ADDFUNCTION(LLLGetTable, tvoid, tstate, tvalue, tvalue, tvalue);
-    ADDFUNCTION(LLLSetTable, tvoid, tstate, tvalue, tvalue, tvalue);
-    ADDFUNCTION(LLLSelf, tvoid, tstate, tvalue, tvalue, tvalue);
-    ADDFUNCTION(LLLToNumber, tbool, tvalue, tluanumberptr);
+    ADDFUNCTION(LLLGetTable, tvoid, tstate, ttvalue, ttvalue, ttvalue);
+    ADDFUNCTION(LLLSetTable, tvoid, tstate, ttvalue, ttvalue, ttvalue);
+    ADDFUNCTION(LLLSelf, tvoid, tstate, ttvalue, ttvalue, ttvalue);
+    ADDFUNCTION(LLLToNumber, tbool, ttvalue, tluanumberptr);
     ADDFUNCTION(LLLNumMod, tluanumber, tluanumber, tluanumber);
 
-    // math.h
-    ADDFUNCTION(l_mathop(pow), tluanumber, tluanumber, tluanumber);
-    ADDFUNCTION(l_mathop(floor), tluanumber, tluanumber);
-
+    // Deprecated lll
     LOADUNOP(lll_unm);
     LOADUNOP(lll_bnot);
     LOADUNOP(lll_not);
-
-    ADDFUNCTION(lll_test, tint, tint, tvalue);
-    ADDFUNCTION(lll_checkcg, tvoid, tstate, tci, tvalue);
-    ADDFUNCTION(lll_newtable, ttable, tstate, tvalue);
+    ADDFUNCTION(lll_test, tint, tint, ttvalue);
+    ADDFUNCTION(lll_checkcg, tvoid, tstate, tci, ttvalue);
+    ADDFUNCTION(lll_newtable, ttable, tstate, ttvalue);
     ADDFUNCTION(lll_upvalbarrier, tvoid, tstate, tupval);
-    ADDFUNCTION(lll_forloop, tint, tvalue);
-    ADDFUNCTION(lll_forprep, tvoid, tstate, tvalue);
-    ADDFUNCTION(lll_setlist, tvoid, tstate, tvalue, tint, tint);
-    ADDFUNCTION(lll_closure, tvoid, tstate, tclosure, tvalue, tvalue, tint);
+    ADDFUNCTION(lll_forloop, tint, ttvalue);
+    ADDFUNCTION(lll_forprep, tvoid, tstate, ttvalue);
+    ADDFUNCTION(lll_setlist, tvoid, tstate, ttvalue, tint, tint);
+    ADDFUNCTION(lll_closure, tvoid, tstate, tclosure, ttvalue, ttvalue, tint);
     ADDFUNCTION(lll_checkstack, tvoid, tstate, tint);
 
+    // math.h
+    ADDFUNCTION(l_mathop(floor), tluanumber, tluanumber);
+    ADDFUNCTION(l_mathop(pow), tluanumber, tluanumber, tluanumber);
+
+    // ltable.h
+    ADDFUNCTION(luaH_getint, ttvalue, ttable, tluainteger);
+    ADDFUNCTION(luaH_getshortstr, ttvalue, ttable, ttstring);
+    ADDFUNCTION(luaH_getstr, ttvalue, ttable, ttstring);
+    ADDFUNCTION(luaH_get, ttvalue, ttable, ttvalue);
     ADDFUNCTION(luaH_resize, tvoid, tstate, ttable, tint, tint);
-    LOADUNOP(luaV_objlen);
+
+    // ltm.h
+    ADDFUNCTION(luaT_gettm, ttvalue, ttable, tint, ttstring);
+    ADDFUNCTION(luaT_trybinTM, tvoid, tstate, ttvalue, ttvalue, ttvalue, tint);
 
     // lvm.h
-    ADDFUNCTION(luaV_mod, tluainteger, tstate, tluainteger, tluainteger);
-    ADDFUNCTION(luaV_div, tluainteger, tstate, tluainteger, tluainteger);
-    ADDFUNCTION(luaV_shiftl, tluainteger, tluainteger, tluainteger);
     ADDFUNCTION(luaV_concat, tvoid, tstate, tint);
-    ADDFUNCTION(luaV_equalobj, tint, tstate, tvalue, tvalue);
-    ADDFUNCTION(luaV_lessthan, tint, tstate, tvalue, tvalue);
-    ADDFUNCTION(luaV_lessequal, tint, tstate, tvalue, tvalue);
+    ADDFUNCTION(luaV_div, tluainteger, tstate, tluainteger, tluainteger);
+    ADDFUNCTION(luaV_equalobj, tint, tstate, ttvalue, ttvalue);
+    ADDFUNCTION(luaV_finishget, tvoid, tstate, ttvalue, ttvalue, ttvalue,
+            ttvalue);
+    ADDFUNCTION(luaV_lessequal, tint, tstate, ttvalue, ttvalue);
+    ADDFUNCTION(luaV_lessthan, tint, tstate, ttvalue, ttvalue);
+    ADDFUNCTION(luaV_mod, tluainteger, tstate, tluainteger, tluainteger);
+    ADDFUNCTION(luaV_objlen, tvoid, tstate, ttvalue, ttvalue)
+    ADDFUNCTION(luaV_shiftl, tluainteger, tluainteger, tluainteger);
 
-    ADDFUNCTION(luaD_callnoyield, tvoid, tstate, tvalue, tint);
-    ADDFUNCTION(luaF_close, tvoid, tstate, tvalue);
-    ADDFUNCTION(luaT_trybinTM, tvoid, tstate, tvalue, tvalue, tvalue, tint);
+    // ldo.h
+    ADDFUNCTION(luaD_callnoyield, tvoid, tstate, ttvalue, tint);
+
+    // lfunc.h
+    ADDFUNCTION(luaF_close, tvoid, tstate, ttvalue);
 }
 
 void Runtime::AddStructType(const std::string& name, size_t size) {

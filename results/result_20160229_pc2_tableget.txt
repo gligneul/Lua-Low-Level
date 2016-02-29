@@ -1,0 +1,52 @@
+Distro: Fedora release 21 (Twenty One)
+Kernel: 4.1.6-100.fc21.x86_64
+CPU:    Intel(R) Core(TM) i5-3317U CPU @ 1.70GHz
+
+Module: benchmarks/floatarith.lua
+     avg        stddev
+Lua: 1.37216	0.01716	(1.25060%)
+LLL: 0.67724	0.13736	(20.28241%)
+     0.494 time
+
+Module: benchmarks/heapsort.lua
+     avg        stddev
+Lua: 1.67864	0.07776	(4.63224%)
+LLL: 0.64448	0.02221	(3.44610%)
+     0.384 time
+
+Module: benchmarks/increment.lua
+     avg        stddev
+Lua: 1.38912	0.06999	(5.03849%)
+LLL: 0.48244	0.01816	(3.76451%)
+     0.347 time
+
+Module: benchmarks/loopsum.lua
+     avg        stddev
+Lua: 2.44620	0.08787	(3.59211%)
+LLL: 0.48544	0.01940	(3.99538%)
+     0.198 time
+
+Module: benchmarks/mandelbrot.lua
+     avg        stddev
+Lua: 3.59396	0.02360	(0.65675%)
+LLL: 1.14992	0.02494	(2.16926%)
+     0.320 time
+
+Module: benchmarks/matmul.lua
+     avg        stddev
+Lua: 1.71428	0.09171	(5.34976%)
+LLL: 0.55040	0.01764	(3.20407%)
+     0.321 time
+
+Module: benchmarks/queen.lua
+     avg        stddev
+Lua: 1.50200	0.02267	(1.50943%)
+LLL: 0.44388	0.01784	(4.02023%)
+     0.296 time
+
+Module: benchmarks/sudoku.lua
+     avg        stddev
+Lua: 0.92900	0.01700	(1.82992%)
+LLL: 0.60652	0.01681	(2.77163%)
+     0.653 time
+

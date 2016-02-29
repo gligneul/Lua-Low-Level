@@ -16,6 +16,9 @@ extern "C" {
 #include "lvm.h"
 }
 
+static const size_t TAG_OFFSET = offsetof(TValue, tt_);
+static const size_t VALUE_OFFSET = offsetof(TValue, value_);
+
 namespace lll {
 
 Value::Value(CompilerState& cs, int arg, const std::string& name,
@@ -43,7 +46,7 @@ llvm::Value* Value::GetTag() {
         return cs_.MakeInt(tag);
     } else {
         return cs_.LoadField(u_.r, cs_.rt_.MakeIntT(sizeof(int)),
-                offsetof(TValue, tt_), "tag");
+                TAG_OFFSET, "tag");
     }
 }
 
@@ -52,7 +55,7 @@ llvm::Value* Value::GetInteger() {
     if (isk_) {
         return llvm::ConstantInt::get(intt, ivalue(u_.k));
     } else {
-        return cs_.LoadField(u_.r, intt, offsetof(TValue, value_), "ivalue");
+        return cs_.LoadField(u_.r, intt, VALUE_OFFSET, "ivalue");
     }
 }
 
@@ -70,15 +73,27 @@ llvm::Value* Value::GetFloat() {
         }
         return llvm::ConstantFP::get(floatt, n);
     } else {
-        return cs_.LoadField(u_.r, floatt, offsetof(TValue, value_), "nvalue");
+        return cs_.LoadField(u_.r, floatt, VALUE_OFFSET, "nvalue");
     }
+}
+
+llvm::Value* Value::GetTString() {
+    auto stringt = cs_.rt_.GetType("TString");
+    if (isk_) {
+        return cs_.InjectPointer(stringt, tsvalue(u_.k));
+    } else {
+        return cs_.LoadField(u_.r, stringt, VALUE_OFFSET, "tstringvalue");
+    }
+}
+
+llvm::Value* Value::GetTable() {
+    auto tablet = cs_.rt_.GetType("Table");
+    return cs_.LoadField(GetTValue(), tablet, VALUE_OFFSET, "tablevalue");
 }
 
 llvm::Value* Value::GetTValue() {
     if (isk_) {
-        auto intptrt = cs_.rt_.MakeIntT(sizeof(void*));
-        auto intptr = llvm::ConstantInt::get(intptrt, (uintptr_t)(u_.k));
-        return cs_.builder_.CreateIntToPtr(intptr, cs_.rt_.GetType("TValue"));
+        return cs_.InjectPointer(cs_.rt_.GetType("TValue"), u_.k);
     } else {
         return u_.r;
     }

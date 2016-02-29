@@ -11,6 +11,7 @@
 #ifndef LLLRUNTIME_H
 #define LLLRUNTIME_H
 
+#include <cstdio>
 #include <map>
 
 #include <llvm/IR/LLVMContext.h>
@@ -46,6 +47,20 @@ private:
     // Adds a function that can be compiled
     void AddFunction(const std::string& name, llvm::FunctionType* type,
                      void* address);
+
+    // Verifies if the key exists in the map. If not, abort! (debug only)
+    template<typename MapType>
+    inline void AssertKeyExists(const MapType& map, const std::string& key) {
+    #ifdef DEBUG
+    if (map.find(key) == map.end()) {
+        fprinf(stderr, "Key not found %s!\n", key.c_str();
+        exit(1);
+    }
+    #else
+    (void)map;
+    (void)key;
+    #endif
+    }
 
     static Runtime* instance_;
     llvm::LLVMContext& context_;

@@ -43,7 +43,7 @@ int LLLCompile (lua_State *L, Proto *p, char **errmsg) {
         return 1;
     }
 
-    lll::Compiler compiler(p);
+    lll::Compiler compiler(L, p);
     if (!compiler.Compile()) {
         writeerror(L, errmsg, compiler.GetErrorMessage().c_str());
         return 1;

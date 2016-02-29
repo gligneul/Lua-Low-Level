@@ -45,6 +45,12 @@ public:
     // Obtains the float value
     llvm::Value* GetFloat();
 
+    // Obtains the tstring value
+    llvm::Value* GetTString();
+
+    // Obtains the table value
+    llvm::Value* GetTable();
+
     // Obtains the TValue
     llvm::Value* GetTValue();
 

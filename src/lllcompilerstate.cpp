@@ -23,7 +23,8 @@ extern "C" {
 
 namespace lll {
 
-CompilerState::CompilerState(Proto* proto) :
+CompilerState::CompilerState(lua_State* L, Proto* proto) :
+    L_(L),
     proto_(proto),
     context_(llvm::getGlobalContext()),
     rt_(*Runtime::Instance()),
@@ -79,6 +80,12 @@ llvm::Value* CompilerState::ToBool(llvm::Value* value) {
     return builder_.CreateICmpNE(value, MakeInt(0), value->getName());
 }
 
+llvm::Value* CompilerState::InjectPointer(llvm::Type* type, void* ptr) {
+    auto intptrt = rt_.MakeIntT(sizeof(void*));
+    auto intptr = llvm::ConstantInt::get(intptrt, (uintptr_t)ptr);
+    return builder_.CreateIntToPtr(intptr, type);
+}
+
 llvm::Value* CompilerState::GetFieldPtr(llvm::Value* strukt,
         llvm::Type* fieldtype, size_t offset, const std::string& name) {
     auto memt = llvm::PointerType::get(rt_.MakeIntT(1), 0);
@@ -105,9 +112,10 @@ llvm::Value* CompilerState::GetValueR(int arg, const std::string& name) {
 }
 
 llvm::Value* CompilerState::GetValueK(int arg, const std::string& name) {
-    auto k = (uintptr_t)(proto_->k + arg);
-    auto intptr = llvm::ConstantInt::get(rt_.MakeIntT(sizeof(void*)), k);
-    return builder_.CreateIntToPtr(intptr, rt_.GetType("TValue"), name);
+    // Since the value is a constant, llvm ignores the name representation
+    // TODO: remove name parameter
+    (void)name;
+    return InjectPointer(rt_.GetType("TValue"), proto_->k + arg);
 }
 
 llvm::Value* CompilerState::GetValueRK(int arg, const std::string& name) {

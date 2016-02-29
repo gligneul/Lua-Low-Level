@@ -16,7 +16,7 @@
 namespace lll {
 
 // Op should be the derived class
-template< typename Op >
+template<typename Op>
 class Opcode {
 public:
     // The type of a compilation step
@@ -26,8 +26,9 @@ public:
     typedef llvm::BasicBlock* (Op::*CompilationStep)(llvm::BasicBlock*);
 
     // Static method that gather the compilation steps and calls one by one
-    static void Compile(CompilerState& cs) {
-        Op o(cs);
+    template<typename... Args>
+    static void Compile(CompilerState& cs, Args... args) {
+        Op o(cs, args...);
         auto steps = o.GetSteps();
         auto b = cs.blocks_[cs.curr_];
         for (auto& step : steps) {
@@ -39,6 +40,16 @@ public:
             cs.builder_.CreateBr(cs.blocks_[cs.curr_ + 1]);
         }
     }
+
+    // Default contructor
+    Opcode(CompilerState& cs) :
+        cs_(cs),
+        B_(cs_.builder_) {
+    }
+
+protected:
+    CompilerState& cs_;
+    llvm::IRBuilder<>& B_;
 };
 
 }

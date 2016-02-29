@@ -19,7 +19,7 @@ extern "C" {
 namespace lll {
 
 Vararg::Vararg(CompilerState& cs) :
-    cs_(cs),
+    Opcode(cs),
     available_(nullptr),
     required_(nullptr),
     nmoves_(nullptr) {

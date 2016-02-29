@@ -39,7 +39,6 @@ private:
     // Retuns the register at ra + offset
     llvm::Value* GetRegisterFromA(llvm::Value* offset);
 
-    CompilerState& cs_;
     llvm::Value* available_;
     llvm::Value* required_;
     llvm::Value* nmoves_;
