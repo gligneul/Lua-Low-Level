@@ -62,8 +62,6 @@ private:
     void CompileSettable();
     void CompileNewtable();
     void CompileSelf();
-    void CompileArithIF(const std::string& function);
-    void CompileBinop(const std::string& function);
     void CompileUnop(const std::string& function);
     void CompileConcat();
     void CompileJmp();

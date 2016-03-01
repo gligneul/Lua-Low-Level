@@ -32,6 +32,13 @@ Value::Value(CompilerState& cs, int arg, const std::string& name,
         u_.r = cs_.GetValueR(arg, name);
 }
 
+Value::Value(CompilerState& cs, llvm::Value* v) :
+    cs_(cs),
+    conversion_(NO_CONVERSION),
+    isk_(false),
+    u_{.r=v} {
+}
+
 llvm::Value* Value::GetTag() {
     if (isk_) {
         TValue _;
@@ -50,6 +57,23 @@ llvm::Value* Value::GetTag() {
     }
 }
 
+llvm::Value* Value::GetTValue() {
+    if (isk_) {
+        return cs_.InjectPointer(cs_.rt_.GetType("TValue"), u_.k);
+    } else {
+        return u_.r;
+    }
+}
+
+void Value::SetValue(Value& value) {
+    cs_.SetRegister(GetTValue(), value.GetTValue());
+}
+
+llvm::Value* Value::IsInteger() {
+    return cs_.builder_.CreateICmpEQ(GetTag(), cs_.MakeInt(LUA_TNUMINT),
+            "is.int");
+}
+
 llvm::Value* Value::GetInteger() {
     auto intt = cs_.rt_.GetType("lua_Integer");
     if (isk_) {
@@ -57,6 +81,11 @@ llvm::Value* Value::GetInteger() {
     } else {
         return cs_.LoadField(u_.r, intt, VALUE_OFFSET, "ivalue");
     }
+}
+
+void Value::SetInteger(llvm::Value* value) {
+    cs_.SetField(u_.r, value, VALUE_OFFSET, "value");
+    cs_.SetField(u_.r, cs_.MakeInt(LUA_TNUMINT), TAG_OFFSET, "tag");
 }
 
 llvm::Value* Value::GetFloat() {
@@ -77,6 +106,11 @@ llvm::Value* Value::GetFloat() {
     }
 }
 
+void Value::SetFloat(llvm::Value* value) {
+    cs_.SetField(u_.r, value, VALUE_OFFSET, "value");
+    cs_.SetField(u_.r, cs_.MakeInt(LUA_TNUMFLT), TAG_OFFSET, "tag");
+}
+
 llvm::Value* Value::GetTString() {
     auto stringt = cs_.rt_.GetType("TString");
     if (isk_) {
@@ -86,17 +120,14 @@ llvm::Value* Value::GetTString() {
     }
 }
 
+llvm::Value* Value::IsTable() {
+    return cs_.builder_.CreateICmpEQ(GetTag(), cs_.MakeInt(ctb(LUA_TTABLE)),
+            "is.table");
+}
+
 llvm::Value* Value::GetTable() {
     auto tablet = cs_.rt_.GetType("Table");
     return cs_.LoadField(GetTValue(), tablet, VALUE_OFFSET, "tablevalue");
-}
-
-llvm::Value* Value::GetTValue() {
-    if (isk_) {
-        return cs_.InjectPointer(cs_.rt_.GetType("TValue"), u_.k);
-    } else {
-        return u_.r;
-    }
 }
 
 }

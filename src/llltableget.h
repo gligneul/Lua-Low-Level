@@ -34,12 +34,12 @@ public:
 
 private:
     // Compilation steps
-    llvm::BasicBlock* CheckTable(llvm::BasicBlock* entry);
-    llvm::BasicBlock* SwithTag(llvm::BasicBlock* entry);
-    llvm::BasicBlock* PerformGet(llvm::BasicBlock* entry);
-    llvm::BasicBlock* SearchForTM(llvm::BasicBlock* entry);
-    llvm::BasicBlock* SaveResult(llvm::BasicBlock* entry);
-    llvm::BasicBlock* FinishGet(llvm::BasicBlock* entry);
+    void CheckTable();
+    void SwithTag();
+    void PerformGet();
+    void SearchForTM();
+    void SaveResult();
+    void FinishGet();
 
     // Call of a specific luaH_get*
     typedef llvm::Value* (Value::*GetMethod)();
@@ -50,9 +50,8 @@ private:
     Value& key_;
     Value& dest_;
     llvm::Value* tablevalue_;
-    std::vector<std::pair<llvm::Value*, llvm::BasicBlock*>> results_;
-    std::vector<std::pair<llvm::Value*, llvm::BasicBlock*>> tms_;
-    llvm::BasicBlock* entry_;
+    IncomingList results_;
+    IncomingList tms_;
     llvm::BasicBlock* switchtag_;
     llvm::BasicBlock* getint_;
     llvm::BasicBlock* getshrstr_;
@@ -61,7 +60,6 @@ private:
     llvm::BasicBlock* saveresult_;
     llvm::BasicBlock* searchtm_;
     llvm::BasicBlock* finishget_;
-    llvm::BasicBlock* end_;
 };
 
 }

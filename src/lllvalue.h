@@ -32,27 +32,37 @@ public:
         STRING_TO_FLOAT
     };
 
-    // Constructor
+    // Constructor that receives a opcode argument
     Value(CompilerState& cs, int arg, const std::string& name,
             ConversionType conversion = NO_CONVERSION);
+
+    // Constructor that receives a non-const tvalue
+    Value(CompilerState& cs, llvm::Value* v);
 
     // Obtains the tag of the value
     llvm::Value* GetTag();
 
-    // Obtains the integer value
-    llvm::Value* GetInteger();
-
-    // Obtains the float value
-    llvm::Value* GetFloat();
-
-    // Obtains the tstring value
-    llvm::Value* GetTString();
-
-    // Obtains the table value
-    llvm::Value* GetTable();
-
     // Obtains the TValue
     llvm::Value* GetTValue();
+
+    // Copy the contents of $value to this
+    void SetValue(Value& value);
+
+    // Integer access methods
+    llvm::Value* IsInteger();
+    llvm::Value* GetInteger();
+    void SetInteger(llvm::Value* value);
+
+    // Float access methods
+    llvm::Value* GetFloat();
+    void SetFloat(llvm::Value* value);
+
+    // String access methods
+    llvm::Value* GetTString();
+
+    // Table access methods
+    llvm::Value* IsTable();
+    llvm::Value* GetTable();
 
 private:
     CompilerState& cs_;

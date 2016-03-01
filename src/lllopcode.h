@@ -19,37 +19,45 @@ namespace lll {
 template<typename Op>
 class Opcode {
 public:
-    // The type of a compilation step
-    // It will receive the entry block and must return the exit block
     // The derived class must implement the GetSteps method that returns a list
     // of compilations steps
-    typedef llvm::BasicBlock* (Op::*CompilationStep)(llvm::BasicBlock*);
+    typedef void (Op::*CompilationStep)();
+
+    // List of incomming values and blocks
+    typedef std::vector<std::pair<llvm::Value*, llvm::BasicBlock*>>
+            IncomingList;
 
     // Static method that gather the compilation steps and calls one by one
     template<typename... Args>
     static void Compile(CompilerState& cs, Args... args) {
         Op o(cs, args...);
         auto steps = o.GetSteps();
-        auto b = cs.blocks_[cs.curr_];
-        for (auto& step : steps) {
-            cs.builder_.SetInsertPoint(b);
-            b = (o.*step)(b);
-        }
-        if (!b->getTerminator()) {
-            cs.builder_.SetInsertPoint(b);
-            cs.builder_.CreateBr(cs.blocks_[cs.curr_ + 1]);
-        }
+        for (auto& step : steps)
+            (o.*step)();
     }
 
     // Default contructor
     Opcode(CompilerState& cs) :
         cs_(cs),
-        B_(cs_.builder_) {
+        B_(cs_.builder_),
+        entry_(cs.blocks_[cs.curr_]),
+        exit_(cs.blocks_[cs.curr_ + 1]) {
     }
 
 protected:
+    // Creates a phi value and adds it's incoming values
+    llvm::Value* CreatePHI(llvm::Type* type, const IncomingList& incoming,
+            const std::string& name) {
+        auto phi = B_.CreatePHI(type, incoming.size(), name);
+        for (auto& i : incoming)
+            phi->addIncoming(i.first, i.second);
+        return phi;
+    }
+
     CompilerState& cs_;
     llvm::IRBuilder<>& B_;
+    llvm::BasicBlock* entry_;
+    llvm::BasicBlock* exit_;
 };
 
 }

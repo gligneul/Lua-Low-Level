@@ -11,11 +11,6 @@
 #ifndef LLLVARARG_H
 #define LLLVARARG_H
 
-#include <vector>
-
-#include <llvm/IR/BasicBlock.h>
-#include <llvm/IR/Value.h>
-
 #include "lllopcode.h"
 
 namespace lll {
@@ -30,11 +25,11 @@ public:
 
 private:
     // Compilation steps
-    llvm::BasicBlock* ComputeAvailableArgs(llvm::BasicBlock* entry);
-    llvm::BasicBlock* ComputeRequiredArgs(llvm::BasicBlock* entry);
-    llvm::BasicBlock* ComputeNMoves(llvm::BasicBlock* entry);
-    llvm::BasicBlock* MoveAvailable(llvm::BasicBlock* entry);
-    llvm::BasicBlock* FillRequired(llvm::BasicBlock* entry);
+    void ComputeAvailableArgs();
+    void ComputeRequiredArgs();
+    void ComputeNMoves();
+    void MoveAvailable();
+    void FillRequired();
 
     // Retuns the register at ra + offset
     llvm::Value* GetRegisterFromA(llvm::Value* offset);
@@ -42,6 +37,11 @@ private:
     llvm::Value* available_;
     llvm::Value* required_;
     llvm::Value* nmoves_;
+    llvm::BasicBlock* computenmoves_;
+    llvm::BasicBlock* movecheck_;
+    llvm::BasicBlock* move_;
+    llvm::BasicBlock* fillcheck_;
+    llvm::BasicBlock* fill_;
 };
 
 }

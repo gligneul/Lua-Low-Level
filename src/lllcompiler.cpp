@@ -188,13 +188,10 @@ void Compiler::CompileGetupval() {
 }
 
 void Compiler::CompileGettabup() {
-    auto args = {
-        cs_.values_.state,
-        cs_.GetUpval(GETARG_B(cs_.instr_)),
-        cs_.GetValueRK(GETARG_C(cs_.instr_), "rkc"),
-        cs_.GetValueR(GETARG_A(cs_.instr_), "ra")
-    };
-    cs_.CreateCall("LLLGetTable", args);
+    Value table(cs_, cs_.GetUpval(GETARG_B(cs_.instr_)));
+    Value key(cs_, GETARG_C(cs_.instr_), "rkc");
+    Value dest(cs_, GETARG_A(cs_.instr_), "ra");
+    TableGet::Compile(cs_, table, key, dest);
 }
 
 void Compiler::CompileGettable() {
@@ -256,23 +253,12 @@ void Compiler::CompileNewtable() {
 }
 
 void Compiler::CompileSelf() {
-    auto args = {
-        cs_.values_.state,
-        cs_.GetValueR(GETARG_A(cs_.instr_), "ra"),
-        cs_.GetValueR(GETARG_B(cs_.instr_), "rb"),
-        cs_.GetValueRK(GETARG_C(cs_.instr_), "rkc")
-    };
-    cs_.CreateCall("LLLSelf", args);
-}
-
-void Compiler::CompileBinop(const std::string& function) {
-    auto args = {
-        cs_.values_.state,
-        cs_.GetValueR(GETARG_A(cs_.instr_), "ra"),
-        cs_.GetValueRK(GETARG_B(cs_.instr_), "rkb"),
-        cs_.GetValueRK(GETARG_C(cs_.instr_), "rkc")
-    };
-    cs_.CreateCall(function, args);
+    Value table(cs_, GETARG_B(cs_.instr_), "rb");
+    Value key(cs_, GETARG_C(cs_.instr_), "rkc");
+    Value methodslot(cs_, GETARG_A(cs_.instr_), "ra");
+    Value selfslot(cs_, GETARG_A(cs_.instr_) + 1, "ra1");
+    selfslot.SetValue(table);
+    TableGet::Compile(cs_, table, key, methodslot);
 }
 
 void Compiler::CompileUnop(const std::string& function) {

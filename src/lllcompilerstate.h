@@ -34,7 +34,7 @@ public:
     CompilerState(lua_State* L, Proto* proto);
 
     // Makes a llvm int value
-    llvm::Value* MakeInt(int value = sizeof(int));
+    llvm::Value* MakeInt(int value);
 
     // Converts an int to boolean
     llvm::Value* ToBool(llvm::Value* value);

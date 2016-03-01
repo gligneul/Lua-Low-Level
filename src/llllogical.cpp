@@ -20,14 +20,16 @@ namespace lll {
 
 Logical::Logical(CompilerState& cs) :
     Opcode(cs),
-    ra_(cs_.GetValueR(GETARG_A(cs_.instr_), "ra")),
-    b_(cs, GETARG_B(cs_.instr_), "rb", Value::STRING_TO_FLOAT),
-    c_(cs, GETARG_C(cs_.instr_), "rc", Value::STRING_TO_FLOAT) {
-    assert(GET_OPCODE(cs_.instr_) == OP_BAND ||
-           GET_OPCODE(cs_.instr_) == OP_BOR ||
-           GET_OPCODE(cs_.instr_) == OP_BXOR ||
-           GET_OPCODE(cs_.instr_) == OP_SHL ||
-           GET_OPCODE(cs_.instr_) == OP_SHR);
+    ra_(cs, GETARG_A(cs_.instr_), "ra"),
+    rb_(cs, GETARG_B(cs_.instr_), "rb", Value::STRING_TO_FLOAT),
+    rc_(cs, GETARG_C(cs_.instr_), "rc", Value::STRING_TO_FLOAT),
+    trytm_(cs.CreateSubBlock("trytm")) {
+    
+    assert(GET_OPCODE(cs.instr_) == OP_BAND ||
+           GET_OPCODE(cs.instr_) == OP_BOR ||
+           GET_OPCODE(cs.instr_) == OP_BXOR ||
+           GET_OPCODE(cs.instr_) == OP_SHL ||
+           GET_OPCODE(cs.instr_) == OP_SHR);
 }
 
 std::vector<Logical::CompilationStep> Logical::GetSteps() {
@@ -37,54 +39,47 @@ std::vector<Logical::CompilationStep> Logical::GetSteps() {
     };
 }
 
-llvm::BasicBlock* Logical::ComputeInteger(llvm::BasicBlock* entry) {
-    auto checkc = cs_.CreateSubBlock("checkc", entry);
-    auto compute = cs_.CreateSubBlock("compute", checkc);
-    auto failed = cs_.CreateSubBlock("failed", compute);
-    auto end = cs_.blocks_[cs_.curr_ + 1];
+void Logical::ComputeInteger() {
+    auto checkrc = cs_.CreateSubBlock("checkc", entry_);
+    auto compute = cs_.CreateSubBlock("compute", checkrc);
 
-    auto inttag = cs_.MakeInt(LUA_TNUMINT);
-    auto b_is_int = cs_.builder_.CreateICmpEQ(b_.GetTag(), inttag);
-    cs_.builder_.CreateCondBr(b_is_int, checkc, failed);
+    B_.SetInsertPoint(entry_);
+    B_.CreateCondBr(rb_.IsInteger(), checkrc, trytm_);
 
-    cs_.builder_.SetInsertPoint(checkc);
-    auto c_is_int = cs_.builder_.CreateICmpEQ(c_.GetTag(), inttag);
-    cs_.builder_.CreateCondBr(c_is_int, compute, failed);
+    B_.SetInsertPoint(checkrc);
+    B_.CreateCondBr(rc_.IsInteger(), compute, trytm_);
 
-    cs_.builder_.SetInsertPoint(compute);
-    auto result = PerformIntOp(b_.GetInteger(), c_.GetInteger());
-    cs_.SetField(ra_, result, offsetof(TValue, value_), "value");
-    cs_.SetField(ra_, inttag, offsetof(TValue, tt_), "tag");
-    cs_.builder_.CreateBr(end);
-
-    return failed;
+    B_.SetInsertPoint(compute);
+    ra_.SetInteger(PerformIntOp(rb_.GetInteger(), rc_.GetInteger()));
+    B_.CreateBr(exit_);
 }
 
-llvm::BasicBlock* Logical::ComputeTaggedMethod(llvm::BasicBlock* entry) {
+void Logical::ComputeTaggedMethod() {
+    B_.SetInsertPoint(trytm_);
     auto args = {
         cs_.values_.state,
-        b_.GetTValue(),
-        c_.GetTValue(),
-        ra_,
+        rb_.GetTValue(),
+        rc_.GetTValue(),
+        ra_.GetTValue(),
         cs_.MakeInt(GetMethodTag())
     };
     cs_.CreateCall("luaT_trybinTM", args);
-    return entry;
+    B_.CreateBr(exit_);
 }
 
-llvm::Value* Logical::PerformIntOp(llvm::Value* lhs, llvm::Value* rhs) {
+llvm::Value* Logical::PerformIntOp(llvm::Value* a, llvm::Value* b) {
+    auto name = "result";
     switch (GET_OPCODE(cs_.instr_)) {
         case OP_BAND:
-            return cs_.builder_.CreateAnd(lhs, rhs, "result");
+            return B_.CreateAnd(a, b, name);
         case OP_BOR:
-            return cs_.builder_.CreateOr(lhs, rhs, "result");
+            return B_.CreateOr(a, b, name);
         case OP_BXOR:
-            return cs_.builder_.CreateXor(lhs, rhs, "result");
+            return B_.CreateXor(a, b, name);
         case OP_SHL:
-            return cs_.CreateCall("luaV_shiftl", {lhs, rhs}, "result");
+            return cs_.CreateCall("luaV_shiftl", {a, b}, name);
         case OP_SHR:
-            return cs_.CreateCall("luaV_shiftl",
-                    {lhs, cs_.builder_.CreateNeg(rhs, "neg.ic")}, "result");
+            return cs_.CreateCall("luaV_shiftl", {a, B_.CreateNeg(b)}, name);
         default:
             break;
     }

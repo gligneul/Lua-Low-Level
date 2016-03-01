@@ -21,152 +21,105 @@ namespace lll {
 
 Arith::Arith(CompilerState& cs) :
     Opcode(cs),
-    ra_(cs_.GetValueR(GETARG_A(cs_.instr_), "ra")),
-    b_(cs, GETARG_B(cs_.instr_), "rb", Value::STRING_TO_FLOAT),
-    c_(cs, GETARG_C(cs_.instr_), "rc", Value::STRING_TO_FLOAT) {
+    ra_(cs, GETARG_A(cs_.instr_), "ra"),
+    rb_(cs, GETARG_B(cs_.instr_), "rb", Value::STRING_TO_FLOAT),
+    rc_(cs, GETARG_C(cs_.instr_), "rc", Value::STRING_TO_FLOAT),
+    intop_(cs.CreateSubBlock("intop")),
+    floatop_(cs.CreateSubBlock("floatop", intop_)),
+    tmop_(cs.CreateSubBlock("tmop", floatop_)) {
 }
 
 std::vector<Arith::CompilationStep> Arith::GetSteps() {
     return {
-        &Arith::Compute,
+        &Arith::SwitchTags,
+        &Arith::ComputeInt,
+        &Arith::ComputeFloat,
         &Arith::ComputeTaggedMethod
     };
 }
 
-llvm::BasicBlock* Arith::Compute(llvm::BasicBlock* entry) {
-    // The optimal solution is complex. The pseudo-code bellow tries to explain
-    // how the operation happens:
-    // switch (b.tag)
-    //   case INT:
-    //     switch (c.tag)
-    //       case INT:
-    //         intOp()
-    //       case FLOAT:
-    //         floatOp()
-    //       default:
-    //         if (tonumber(c))
-    //           floatOp()
-    //         else
-    //           tmOp()
-    //   case FLOAT:
-    //     switch (c.tag)
-    //       case INT:
-    //         floatOp()
-    //       case FLOAT:
-    //         floatOp()
-    //       default:
-    //         if (tonumber(c))
-    //           floatOp()
-    //         else
-    //           tmOp()
-    //   default:
-    //     if (tonumber(b))
-    //       switch (c.tag)
-    //         case INT:
-    //           floatOp()
-    //         case FLOAT:
-    //           floatOp()
-    //         default:
-    //           if (tonumber(c))
-    //             floatOp()
-    //           else
-    //             tmOp()
-    //     else
-    //       tmpOp() 
-
-    // Create one block for each case (eg. int/int, int/float, int/conv...)
-    llvm::BasicBlock* lastblock = nullptr;
-    #define CREATE_BLOCK(name) \
-        auto name = lastblock = cs_.CreateSubBlock(#name, lastblock)
-
-    CREATE_BLOCK(bint);
-    CREATE_BLOCK(bflt);
-    CREATE_BLOCK(bstr);
-    CREATE_BLOCK(bint_cflt);
-    CREATE_BLOCK(bint_cstr);
-    CREATE_BLOCK(bflt_cint);
-    CREATE_BLOCK(bflt_cflt);
-    CREATE_BLOCK(bflt_cstr);
-    CREATE_BLOCK(bstr_cint);
-    CREATE_BLOCK(bstr_cflt);
-    CREATE_BLOCK(bstr_cstr);
-    CREATE_BLOCK(int_op);
-    CREATE_BLOCK(flt_op);
-    CREATE_BLOCK(tm_op);
-    auto end = cs_.blocks_[cs_.curr_ + 1];
+void Arith::SwitchTags() {
+    // Creates a bblock for each possible combination of tags
+    auto bint = cs_.CreateSubBlock("bint");
+    auto bflt = cs_.CreateSubBlock("bflt", bint);
+    auto bstr = cs_.CreateSubBlock("bstr", bflt);
+    auto bint_cflt = cs_.CreateSubBlock("bint_cflt", bstr);
+    auto bint_cstr = cs_.CreateSubBlock("bint_cstr", bint_cflt);
+    auto bflt_cint = cs_.CreateSubBlock("bflt_cint", bint_cstr);
+    auto bflt_cflt = cs_.CreateSubBlock("bflt_cflt", bflt_cint);
+    auto bflt_cstr = cs_.CreateSubBlock("bflt_cstr", bflt_cflt);
+    auto bstr_cint = cs_.CreateSubBlock("bstr_cint", bflt_cstr);
+    auto bstr_cflt = cs_.CreateSubBlock("bstr_cflt", bstr_cint);
+    auto bstr_cstr = cs_.CreateSubBlock("bstr_cstr", bstr_cflt);
 
     // Operands information
-    auto btag = b_.GetTag();
-    auto ctag = c_.GetTag();
+    B_.SetInsertPoint(entry_);
+    auto btag = rb_.GetTag();
+    auto ctag = rc_.GetTag();
     auto bnumber = cs_.values_.bnumber;
     auto cnumber = cs_.values_.cnumber;
 
     // Make the switches
-    SwitchTag(b_, btag, bnumber, entry, bint, bflt, bstr, tm_op);
-    SwitchTag(c_, ctag, cnumber, bint, int_op, bint_cflt, bint_cstr, tm_op);
-    SwitchTag(c_, ctag, cnumber, bflt, bflt_cint, bflt_cflt, bflt_cstr, tm_op);
-    SwitchTag(c_, ctag, cnumber, bstr, bstr_cint, bstr_cflt, bstr_cstr, tm_op);
+    SwitchTagCase(rb_, btag, bnumber, entry_, bint, bflt, bstr);
+    SwitchTagCase(rc_, ctag, cnumber, bint, intop_, bint_cflt, bint_cstr);
+    SwitchTagCase(rc_, ctag, cnumber, bflt, bflt_cint, bflt_cflt, bflt_cstr);
+    SwitchTagCase(rc_, ctag, cnumber, bstr, bstr_cint, bstr_cflt, bstr_cstr);
 
-    // Int operation
-    cs_.builder_.SetInsertPoint(int_op);
-    if (HasIntegerOp()) {
-        auto result = PerformIntOp(b_.GetInteger(), c_.GetInteger());
-        cs_.SetField(ra_, result, offsetof(TValue, value_), "value");
-        auto inttag = cs_.MakeInt(LUA_TNUMINT);
-        cs_.SetField(ra_, inttag, offsetof(TValue, tt_), "tag");
-        cs_.builder_.CreateBr(end);
-    }
-
-    // Float operation
-    cs_.builder_.SetInsertPoint(flt_op);
+    // Set nb and nc incomings
     auto floatt = cs_.rt_.GetType("lua_Number");
-    int nincoming = 8 + (int)!HasIntegerOp();
-    auto nb = cs_.builder_.CreatePHI(floatt, nincoming, "nb");
-    auto nc = cs_.builder_.CreatePHI(floatt, nincoming, "nc");
-    auto result = PerformFloatOp(nb, nc);
-    cs_.SetField(ra_, result, offsetof(TValue, value_), "value");
-    auto flttag = cs_.MakeInt(LUA_TNUMFLT);
-    cs_.SetField(ra_, flttag, offsetof(TValue, tt_), "tag");
-    cs_.builder_.CreateBr(end);
-
-    // Set phi's incomings
     #define ITOF(v) \
-        cs_.builder_.CreateSIToFP(v, floatt, v->getName() + "_flt")
+        B_.CreateSIToFP(v, floatt, v->getName() + "_flt")
 
     #define LOAD(v) \
-        cs_.builder_.CreateLoad(v, v->getName() + "_loaded")
+        B_.CreateLoad(v, v->getName() + "_loaded")
 
     #define SET_INCOMING(block, bvalue, cvalue) { \
-        cs_.builder_.SetInsertPoint(block); \
-        nb->addIncoming((bvalue), (block)); \
-        nc->addIncoming((cvalue), (block)); \
-        cs_.builder_.CreateBr(flt_op); }
+        B_.SetInsertPoint(block); \
+        nbinc_.push_back({(bvalue), (block)}); \
+        ncinc_.push_back({(cvalue), (block)}); \
+        B_.CreateBr(floatop_); }
 
     if (!HasIntegerOp()) {
-        SET_INCOMING(int_op, ITOF(b_.GetInteger()), ITOF(c_.GetInteger()));
+        SET_INCOMING(intop_, ITOF(rb_.GetInteger()), ITOF(rc_.GetInteger()));
     }
-    SET_INCOMING(bint_cflt, ITOF(b_.GetInteger()), c_.GetFloat());
-    SET_INCOMING(bint_cstr, ITOF(b_.GetInteger()), LOAD(cnumber));
-    SET_INCOMING(bflt_cint, b_.GetFloat(), ITOF(c_.GetInteger()));
-    SET_INCOMING(bflt_cflt, b_.GetFloat(), c_.GetFloat());
-    SET_INCOMING(bflt_cstr, b_.GetFloat(), LOAD(cnumber));
-    SET_INCOMING(bstr_cint, LOAD(bnumber), ITOF(c_.GetInteger()));
-    SET_INCOMING(bstr_cflt, LOAD(bnumber), c_.GetFloat());
+    SET_INCOMING(bint_cflt, ITOF(rb_.GetInteger()), rc_.GetFloat());
+    SET_INCOMING(bint_cstr, ITOF(rb_.GetInteger()), LOAD(cnumber));
+    SET_INCOMING(bflt_cint, rb_.GetFloat(), ITOF(rc_.GetInteger()));
+    SET_INCOMING(bflt_cflt, rb_.GetFloat(), rc_.GetFloat());
+    SET_INCOMING(bflt_cstr, rb_.GetFloat(), LOAD(cnumber));
+    SET_INCOMING(bstr_cint, LOAD(bnumber), ITOF(rc_.GetInteger()));
+    SET_INCOMING(bstr_cflt, LOAD(bnumber), rc_.GetFloat());
     SET_INCOMING(bstr_cstr, LOAD(bnumber), LOAD(cnumber));
-
-    return tm_op;
 }
 
-llvm::BasicBlock* Arith::ComputeTaggedMethod(llvm::BasicBlock* entry) {
+void Arith::ComputeInt() {
+    if (HasIntegerOp()) {
+        B_.SetInsertPoint(intop_);
+        ra_.SetInteger(PerformIntOp(rb_.GetInteger(), rc_.GetInteger()));
+        B_.CreateBr(exit_);
+    }
+}
+
+void Arith::ComputeFloat() {
+    B_.SetInsertPoint(floatop_);
+    auto floatt = cs_.rt_.GetType("lua_Number");
+    auto nb = CreatePHI(floatt, nbinc_, "nb");
+    auto nc = CreatePHI(floatt, ncinc_, "nc");
+    ra_.SetFloat(PerformFloatOp(nb, nc));
+    B_.CreateBr(exit_);
+}
+
+void Arith::ComputeTaggedMethod() {
+    B_.SetInsertPoint(tmop_);
     auto args = {
         cs_.values_.state,
-        b_.GetTValue(),
-        c_.GetTValue(),
-        ra_,
+        rb_.GetTValue(),
+        rc_.GetTValue(),
+        ra_.GetTValue(),
         cs_.MakeInt(GetMethodTag())
     };
     cs_.CreateCall("luaT_trybinTM", args);
-    return entry;
+    B_.CreateBr(exit_);
 }
 
 bool Arith::HasIntegerOp() {
@@ -179,43 +132,39 @@ bool Arith::HasIntegerOp() {
     return false;
 }
 
-void Arith::SwitchTag(Value& value, llvm::Value* tag, llvm::Value* convptr,
+void Arith::SwitchTagCase(Value& value, llvm::Value* tag, llvm::Value* convptr,
         llvm::BasicBlock* entry, llvm::BasicBlock* intop,
-        llvm::BasicBlock* floatop, llvm::BasicBlock* convop,
-        llvm::BasicBlock* tmop) {
-    auto isfloat = cs_.CreateSubBlock("is_flt", entry);
-    auto converted = cs_.CreateSubBlock("converted", isfloat);
+        llvm::BasicBlock* floatop, llvm::BasicBlock* convop) {
+    auto convert = cs_.CreateSubBlock("convert", entry);
 
-    cs_.builder_.SetInsertPoint(entry);
-    auto is_tag_int = cs_.builder_.CreateICmpEQ(tag, cs_.MakeInt(LUA_TNUMINT),
-            "is.tag.int");
-    cs_.builder_.CreateCondBr(is_tag_int, intop, isfloat);
+    B_.SetInsertPoint(entry);
+    auto s = B_.CreateSwitch(tag, convert, 2);
+    auto AddCase = [&](int v, llvm::BasicBlock* block) {
+        s->addCase(static_cast<llvm::ConstantInt*>(cs_.MakeInt(v)), block); };
+    AddCase(LUA_TNUMINT, intop);
+    AddCase(LUA_TNUMFLT, floatop);
 
-    cs_.builder_.SetInsertPoint(isfloat);
-    auto is_tag_float = cs_.builder_.CreateICmpEQ(tag, cs_.MakeInt(LUA_TNUMFLT),
-            "is.tag.float");
-    cs_.builder_.CreateCondBr(is_tag_float, floatop, converted);
-
-    cs_.builder_.SetInsertPoint(converted);
-    auto is_value_converted = cs_.CreateCall("LLLToNumber",
-            {value.GetTValue(), convptr}, "is.value.converted");
-    cs_.builder_.CreateCondBr(is_value_converted, convop, tmop);
+    B_.SetInsertPoint(convert);
+    auto args = {value.GetTValue(), convptr};
+    auto converted = cs_.CreateCall("LLLToNumber", args, "converted");
+    B_.CreateCondBr(converted, convop, tmop_);
 }
 
 llvm::Value* Arith::PerformIntOp(llvm::Value* lhs, llvm::Value* rhs) {
+    auto name = "result";
     switch (GET_OPCODE(cs_.instr_)) {
         case OP_ADD:
-            return cs_.builder_.CreateAdd(lhs, rhs, "result");
+            return B_.CreateAdd(lhs, rhs, name);
         case OP_SUB:
-            return cs_.builder_.CreateSub(lhs, rhs, "result");
+            return B_.CreateSub(lhs, rhs, name);
         case OP_MUL:
-            return cs_.builder_.CreateMul(lhs, rhs, "result");
+            return B_.CreateMul(lhs, rhs, name);
         case OP_MOD:
             return cs_.CreateCall("luaV_mod", {cs_.values_.state, lhs, rhs},
-                    "result");
+                    name);
         case OP_IDIV:
             return cs_.CreateCall("luaV_div", {cs_.values_.state, lhs, rhs},
-                    "result");
+                    name);
         default:
             break;
     }
@@ -224,23 +173,23 @@ llvm::Value* Arith::PerformIntOp(llvm::Value* lhs, llvm::Value* rhs) {
 }
 
 llvm::Value* Arith::PerformFloatOp(llvm::Value* lhs, llvm::Value* rhs) {
+    auto name = "result";
     switch (GET_OPCODE(cs_.instr_)) {
         case OP_ADD:
-            return cs_.builder_.CreateFAdd(lhs, rhs, "result");
+            return B_.CreateFAdd(lhs, rhs, name);
         case OP_SUB:
-            return cs_.builder_.CreateFSub(lhs, rhs, "result");
+            return B_.CreateFSub(lhs, rhs, name);
         case OP_MUL:
-            return cs_.builder_.CreateFMul(lhs, rhs, "result");
+            return B_.CreateFMul(lhs, rhs, name);
         case OP_MOD:
-            return cs_.CreateCall("LLLNumMod", {lhs, rhs}, "result");
+            return cs_.CreateCall("LLLNumMod", {lhs, rhs}, name);
         case OP_POW:
-            return cs_.CreateCall(STRINGFY2(l_mathop(pow)), {lhs, rhs},
-                    "result");
+            return cs_.CreateCall(STRINGFY2(l_mathop(pow)), {lhs, rhs}, name);
         case OP_DIV:
-            return cs_.builder_.CreateFDiv(lhs, rhs, "result");
+            return B_.CreateFDiv(lhs, rhs, name);
         case OP_IDIV:
             return cs_.CreateCall(STRINGFY2(l_mathop(floor)),
-                    {cs_.builder_.CreateFDiv(lhs, rhs, "result")}, "floor");
+                    {B_.CreateFDiv(lhs, rhs, name)}, "floor");
         default:
             break;
     }

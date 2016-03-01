@@ -59,30 +59,10 @@ static void dumpstack (StkId begin, StkId end) {
 }
 #endif
 
-void LLLGetTable(lua_State* L, TValue* t, TValue* k, TValue* v) {
-    const TValue *aux;
-    if (luaV_fastget(L, t, k, aux, luaH_get)) {
-        setobj2s(L, v, aux);
-    } else {
-        luaV_finishget(L, t, k, v, aux);
-    }
-}
-
 void LLLSetTable(lua_State* L, TValue* t, TValue* k, TValue* v) {
     const TValue *slot;
     if (!luaV_fastset(L, t, k, slot, luaH_get, v))
         luaV_finishset(L, t, k, v, slot);
-}
-
-void LLLSelf(lua_State* L, TValue* ra, TValue* rb, TValue* rc) {
-    const TValue *aux;
-    TString *key = tsvalue(rc);
-    setobjs2s(L, ra + 1, rb);
-    if (luaV_fastget(L, rb, key, aux, luaH_getstr)) {
-        setobj2s(L, ra, aux);
-    } else {
-        luaV_finishget(L, rb, rc, ra, aux);
-    }
 }
 
 int LLLToNumber(const TValue* obj, lua_Number* n) {
@@ -369,9 +349,7 @@ void Runtime::InitFunctions() {
     auto tbool = llvm::Type::getInt1Ty(context_);
 
     // LLL
-    ADDFUNCTION(LLLGetTable, tvoid, tstate, ttvalue, ttvalue, ttvalue);
     ADDFUNCTION(LLLSetTable, tvoid, tstate, ttvalue, ttvalue, ttvalue);
-    ADDFUNCTION(LLLSelf, tvoid, tstate, ttvalue, ttvalue, ttvalue);
     ADDFUNCTION(LLLToNumber, tbool, ttvalue, tluanumberptr);
     ADDFUNCTION(LLLNumMod, tluanumber, tluanumber, tluanumber);
 

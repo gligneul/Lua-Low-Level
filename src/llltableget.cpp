@@ -28,7 +28,6 @@ TableGet::TableGet(CompilerState& cs, Value& table, Value& key, Value& dest) :
     key_(key),
     dest_(dest),
     tablevalue_(nullptr),
-    entry_(cs_.blocks_[cs_.curr_]),
     switchtag_(cs_.CreateSubBlock("switchtag")),
     getint_(cs_.CreateSubBlock("getint", switchtag_)),
     getshrstr_(cs_.CreateSubBlock("getshrstr", getint_)),
@@ -36,8 +35,7 @@ TableGet::TableGet(CompilerState& cs, Value& table, Value& key, Value& dest) :
     getany_(cs_.CreateSubBlock("getany", getlngstr_)),
     saveresult_(cs_.CreateSubBlock("saveresult", getany_)),
     searchtm_(cs_.CreateSubBlock("searchtm", saveresult_)),
-    finishget_(cs_.CreateSubBlock("finshget", searchtm_)),
-    end_(cs_.blocks_[cs_.curr_ + 1]) {
+    finishget_(cs_.CreateSubBlock("finshget", searchtm_)) {
 }
 
 std::vector<TableGet::CompilationStep> TableGet::GetSteps() {
@@ -51,18 +49,15 @@ std::vector<TableGet::CompilationStep> TableGet::GetSteps() {
     };
 }
 
-llvm::BasicBlock* TableGet::CheckTable(llvm::BasicBlock* entry) {
+void TableGet::CheckTable() {
     B_.SetInsertPoint(entry_);
-    auto tabletag = cs_.MakeInt(ctb(LUA_TTABLE));
-    auto is_table = B_.CreateICmpEQ(table_.GetTag(), tabletag, "is.table");
-    B_.CreateCondBr(is_table, switchtag_, finishget_);
-    auto nulltvalue = llvm::ConstantPointerNull::get(
-            static_cast<llvm::PointerType*>(cs_.rt_.GetType("TValue")));
+    B_.CreateCondBr(table_.IsTable(), switchtag_, finishget_);
+    auto ttvalue = static_cast<llvm::PointerType*>(cs_.rt_.GetType("TValue"));
+    auto nulltvalue = llvm::ConstantPointerNull::get(ttvalue);
     tms_.push_back({nulltvalue, entry_});
-    return entry;
 }
 
-llvm::BasicBlock* TableGet::SwithTag(llvm::BasicBlock* entry) {
+void TableGet::SwithTag() {
     B_.SetInsertPoint(switchtag_);
     tablevalue_ = table_.GetTable();
     auto s = B_.CreateSwitch(key_.GetTag(), getany_, 4);
@@ -73,18 +68,16 @@ llvm::BasicBlock* TableGet::SwithTag(llvm::BasicBlock* entry) {
     AddCase(ctb(LUA_TSHRSTR), getshrstr_);
     AddCase(ctb(LUA_TLNGSTR), getlngstr_);
     AddCase(LUA_TNIL, searchtm_);
-    return entry;
 }
 
-llvm::BasicBlock* TableGet::PerformGet(llvm::BasicBlock* entry) {
+void TableGet::PerformGet() {
     PerformGetCase(getint_, &Value::GetInteger, "int");
     PerformGetCase(getshrstr_, &Value::GetTString, "shortstr");
     PerformGetCase(getlngstr_, &Value::GetTString, "str");
     PerformGetCase(getany_, &Value::GetTValue, "");
-    return entry;
 }
 
-llvm::BasicBlock* TableGet::SearchForTM(llvm::BasicBlock* entry) {
+void TableGet::SearchForTM() {
     auto checkflags = cs_.CreateSubBlock("checkflags", searchtm_);
     auto callgettm = cs_.CreateSubBlock("callgettm", checkflags);
     auto tmnotfound = cs_.CreateSubBlock("tmnotfound", callgettm);
@@ -119,38 +112,29 @@ llvm::BasicBlock* TableGet::SearchForTM(llvm::BasicBlock* entry) {
     B_.SetInsertPoint(tmnotfound);
     cs_.SetField(dest_.GetTValue(), cs_.MakeInt(LUA_TNIL),
             offsetof(TValue, tt_), "desttag");
-    B_.CreateBr(end_);
-
-    return entry;
+    B_.CreateBr(exit_);
 }
 
-llvm::BasicBlock* TableGet::SaveResult(llvm::BasicBlock* entry) {
+void TableGet::SaveResult() {
     B_.SetInsertPoint(saveresult_);
-    auto tvaluet = cs_.rt_.GetType("TValue");
-    auto resultphi = B_.CreatePHI(tvaluet, results_.size(), "resultphi");
-    for (auto& r : results_)
-        resultphi->addIncoming(r.first, r.second);
+    auto ttvalue = cs_.rt_.GetType("TValue");
+    auto resultphi = CreatePHI(ttvalue, results_, "resultphi");
     cs_.SetRegister(dest_.GetTValue(), resultphi);
-    B_.CreateBr(end_);
-    return entry;
+    B_.CreateBr(exit_);
 }
 
-llvm::BasicBlock* TableGet::FinishGet(llvm::BasicBlock* entry) {
+void TableGet::FinishGet() {
     B_.SetInsertPoint(finishget_);
-    auto tvaluet = cs_.rt_.GetType("TValue");
-    auto tmphi = B_.CreatePHI(tvaluet, tms_.size(), "tmphi");
-    for (auto& tm : tms_)
-        tmphi->addIncoming(tm.first, tm.second);
+    auto ttvalue = cs_.rt_.GetType("TValue");
     auto args = {
         cs_.values_.state,
         table_.GetTValue(),
         key_.GetTValue(),
         dest_.GetTValue(),
-        static_cast<llvm::Value*>(tmphi)
+        CreatePHI(ttvalue, tms_, "tmphi")
     };
     cs_.CreateCall("luaV_finishget", args);
-    B_.CreateBr(end_);
-    return entry;
+    B_.CreateBr(exit_);
 }
 
 void TableGet::PerformGetCase(llvm::BasicBlock* block, GetMethod getmethod,

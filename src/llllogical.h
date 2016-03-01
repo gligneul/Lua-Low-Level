@@ -29,18 +29,19 @@ public:
 
 private:
     // Compilation steps
-    llvm::BasicBlock* ComputeInteger(llvm::BasicBlock* entry);
-    llvm::BasicBlock* ComputeTaggedMethod(llvm::BasicBlock* entry);
+    void ComputeInteger();
+    void ComputeTaggedMethod();
 
     // Performs the integer binary operation
-    llvm::Value* PerformIntOp(llvm::Value* lhs, llvm::Value* rhs);
+    llvm::Value* PerformIntOp(llvm::Value* a, llvm::Value* b);
     
     // Obtains the corresponding tag for the opcode
     int GetMethodTag();
 
-    llvm::Value* ra_;
-    Value b_;
-    Value c_;
+    Value ra_;
+    Value rb_;
+    Value rc_;
+    llvm::BasicBlock* trytm_;
 };
 
 }
