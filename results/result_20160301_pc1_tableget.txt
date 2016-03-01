@@ -1,0 +1,52 @@
+Distro: CentOS release 6.6 (Final)
+Kernel: 2.6.32-504.30.3.el6.x86_64
+CPU:    Intel(R) Core(TM) i7-4770 CPU @ 3.40GHz
+
+Module: benchmarks/floatarith.lua
+     avg        stddev
+Lua: 0.76480	0.03696	(4.83271%)
+LLL: 0.29132	0.00048	(0.16343%)
+     0.381 time
+
+Module: benchmarks/heapsort.lua
+     avg        stddev
+Lua: 0.73452	0.03084	(4.19863%)
+LLL: 0.43460	0.00497	(1.14279%)
+     0.592 time
+
+Module: benchmarks/increment.lua
+     avg        stddev
+Lua: 0.76392	0.02470	(3.23351%)
+LLL: 0.35900	0.00831	(2.31522%)
+     0.470 time
+
+Module: benchmarks/loopsum.lua
+     avg        stddev
+Lua: 0.76968	0.04042	(5.25172%)
+LLL: 0.40980	0.01017	(2.48255%)
+     0.532 time
+
+Module: benchmarks/mandelbrot.lua
+     avg        stddev
+Lua: 1.12860	0.12527	(11.10001%)
+LLL: 0.45584	0.00981	(2.15286%)
+     0.404 time
+
+Module: benchmarks/matmul.lua
+     avg        stddev
+Lua: 0.70632	0.23807	(33.70536%)
+LLL: 0.34800	0.00281	(0.80852%)
+     0.493 time
+
+Module: benchmarks/queen.lua
+     avg        stddev
+Lua: 0.49652	0.02204	(4.43965%)
+LLL: 0.27996	0.00140	(0.49965%)
+     0.564 time
+
+Module: benchmarks/sudoku.lua
+     avg        stddev
+Lua: 0.39368	0.01460	(3.70773%)
+LLL: 0.41384	0.00457	(1.10443%)
+     1.051 time
+

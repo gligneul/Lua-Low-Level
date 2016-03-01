@@ -60,10 +60,12 @@ void Arith::SwitchTags() {
     auto cnumber = cs_.values_.cnumber;
 
     // Make the switches
-    SwitchTagCase(rb_, btag, bnumber, entry_, bint, bflt, bstr);
-    SwitchTagCase(rc_, ctag, cnumber, bint, intop_, bint_cflt, bint_cstr);
-    SwitchTagCase(rc_, ctag, cnumber, bflt, bflt_cint, bflt_cflt, bflt_cstr);
-    SwitchTagCase(rc_, ctag, cnumber, bstr, bstr_cint, bstr_cflt, bstr_cstr);
+    SwitchTagCase(rb_, btag, bnumber, entry_, bint, bflt, bstr, true);
+    SwitchTagCase(rc_, ctag, cnumber, bint, intop_, bint_cflt, bint_cstr, true);
+    SwitchTagCase(rc_, ctag, cnumber, bflt, bflt_cint, bflt_cflt, bflt_cstr,
+            false);
+    SwitchTagCase(rc_, ctag, cnumber, bstr, bstr_cint, bstr_cflt, bstr_cstr,
+            false);
 
     // Set nb and nc incomings
     auto floatt = cs_.rt_.GetType("lua_Number");
@@ -134,15 +136,22 @@ bool Arith::HasIntegerOp() {
 
 void Arith::SwitchTagCase(Value& value, llvm::Value* tag, llvm::Value* convptr,
         llvm::BasicBlock* entry, llvm::BasicBlock* intop,
-        llvm::BasicBlock* floatop, llvm::BasicBlock* convop) {
-    auto convert = cs_.CreateSubBlock("convert", entry);
+        llvm::BasicBlock* floatop, llvm::BasicBlock* convop, bool intfirst) {
+    auto checkothertag = cs_.CreateSubBlock("checkothertag", entry);
+    auto convert = cs_.CreateSubBlock("convert", checkothertag);
+
+    auto firsttag = cs_.MakeInt(intfirst ? LUA_TNUMINT : LUA_TNUMFLT);
+    auto secondtag = cs_.MakeInt(intfirst ? LUA_TNUMFLT : LUA_TNUMINT);
+    auto firstop = intfirst ? intop : floatop;
+    auto secondop = intfirst ? floatop : intop;
 
     B_.SetInsertPoint(entry);
-    auto s = B_.CreateSwitch(tag, convert, 2);
-    auto AddCase = [&](int v, llvm::BasicBlock* block) {
-        s->addCase(static_cast<llvm::ConstantInt*>(cs_.MakeInt(v)), block); };
-    AddCase(LUA_TNUMINT, intop);
-    AddCase(LUA_TNUMFLT, floatop);
+    auto hasfirsttag = B_.CreateICmpEQ(tag, firsttag);
+    B_.CreateCondBr(hasfirsttag, firstop, checkothertag);
+
+    B_.SetInsertPoint(checkothertag);
+    auto hassecondtag = B_.CreateICmpEQ(tag, secondtag);
+    B_.CreateCondBr(hassecondtag, secondop, convert);
 
     B_.SetInsertPoint(convert);
     auto args = {value.GetTValue(), convptr};

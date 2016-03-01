@@ -37,15 +37,17 @@ private:
     bool HasIntegerOp();
 
     // Go to the target block depending on the tag:
-    // switch (tag)
-    //   case INT:          goto intop;
-    //   case FLOAT:        goto floatop;
-    //   default:
-    //     if (tonumber())  goto convop;
-    //     else             goto tmop_;
+    // if istagint
+    //   goto intop
+    // elseif istagfloat
+    //   goto floatop
+    // elseif tonumber
+    //   goto convop
+    // else
+    //   goto tmop
     void SwitchTagCase(Value& value, llvm::Value* tag, llvm::Value* convptr,
             llvm::BasicBlock* entry, llvm::BasicBlock* intop,
-            llvm::BasicBlock* floatop, llvm::BasicBlock* convop);
+            llvm::BasicBlock* floatop, llvm::BasicBlock* convop, bool intfirst);
 
     // Performs the integer/float binary operation
     llvm::Value* PerformIntOp(llvm::Value* a, llvm::Value* b);
