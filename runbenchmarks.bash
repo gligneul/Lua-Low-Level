@@ -8,7 +8,7 @@
 # Execute each benchmark modules with and prints the Lua Interpreter and 
 # the LLL time
 
-n_tests=25
+n_tests=10
 
 modules_prefix='benchmarks/'
 modules=(

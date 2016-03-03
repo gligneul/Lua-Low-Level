@@ -59,10 +59,12 @@ static void dumpstack (StkId begin, StkId end) {
 }
 #endif
 
+void LLLGetTable(lua_State* L, TValue* t, TValue* k, TValue* v) {
+    luaV_gettable(L, t, k, v);
+}
+
 void LLLSetTable(lua_State* L, TValue* t, TValue* k, TValue* v) {
-    const TValue *slot;
-    if (!luaV_fastset(L, t, k, slot, luaH_get, v))
-        luaV_finishset(L, t, k, v, slot);
+    luaV_settable(L, t, k, v);
 }
 
 int LLLToNumber(const TValue* obj, lua_Number* n) {
@@ -350,6 +352,7 @@ void Runtime::InitFunctions() {
     auto tbool = llvm::Type::getInt1Ty(context_);
 
     // LLL
+    ADDFUNCTION(LLLGetTable, tvoid, tstate, ttvalue, ttvalue, ttvalue);
     ADDFUNCTION(LLLSetTable, tvoid, tstate, ttvalue, ttvalue, ttvalue);
     ADDFUNCTION(LLLToNumber, tbool, ttvalue, tluanumberptr);
     ADDFUNCTION(LLLNumMod, tluanumber, tluanumber, tluanumber);

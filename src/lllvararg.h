@@ -37,7 +37,6 @@ private:
     llvm::Value* available_;
     llvm::Value* required_;
     llvm::Value* nmoves_;
-    llvm::BasicBlock* computenmoves_;
     llvm::BasicBlock* movecheck_;
     llvm::BasicBlock* move_;
     llvm::BasicBlock* fillcheck_;

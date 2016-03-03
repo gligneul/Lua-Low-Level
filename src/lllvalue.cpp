@@ -39,6 +39,10 @@ Value::Value(CompilerState& cs, llvm::Value* v) :
     u_{.r=v} {
 }
 
+bool Value::IsK() {
+    return isk_;
+}
+
 llvm::Value* Value::GetTag() {
     if (isk_) {
         TValue _;

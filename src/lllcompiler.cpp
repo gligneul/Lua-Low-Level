@@ -13,6 +13,7 @@
 #include <llvm/Support/TargetSelect.h>
 
 #define LLL_USE_MCJIT
+#define LLL_EXPAND_TABLE_OP
 
 #ifdef LLL_USE_MCJIT
 #include <llvm/ExecutionEngine/MCJIT.h>
@@ -192,24 +193,51 @@ void Compiler::CompileGettabup() {
     Value table(cs_, cs_.GetUpval(GETARG_B(cs_.instr_)));
     Value key(cs_, GETARG_C(cs_.instr_), "rkc");
     Value dest(cs_, GETARG_A(cs_.instr_), "ra");
-    TableGet::Compile(cs_, table, key, dest);
+    #ifdef LLL_EXPAND_TABLE_OP
+        TableGet::Compile(cs_, table, key, dest);
+    #else
+        auto args = {
+            cs_.values_.state,
+            table.GetTValue(),
+            key.GetTValue(),
+            dest.GetTValue()
+        };
+        cs_.CreateCall("LLLGetTable", args);
+    #endif
 }
 
 void Compiler::CompileGettable() {
     Value table(cs_, GETARG_B(cs_.instr_), "rb");
     Value key(cs_, GETARG_C(cs_.instr_), "rkc");
     Value dest(cs_, GETARG_A(cs_.instr_), "ra");
-    TableGet::Compile(cs_, table, key, dest);
+    #ifdef LLL_EXPAND_TABLE_OP
+        TableGet::Compile(cs_, table, key, dest);
+    #else
+        auto args = {
+            cs_.values_.state,
+            table.GetTValue(),
+            key.GetTValue(),
+            dest.GetTValue()
+        };
+        cs_.CreateCall("LLLGetTable", args);
+    #endif
 }
 
 void Compiler::CompileSettabup() {
-    auto args = {
-        cs_.values_.state,
-        cs_.GetUpval(GETARG_A(cs_.instr_)), 
-        cs_.GetValueRK(GETARG_B(cs_.instr_), "rkb"),
-        cs_.GetValueRK(GETARG_C(cs_.instr_), "rkc")
-    };
-    cs_.CreateCall("LLLSetTable", args);
+    Value table(cs_, cs_.GetUpval(GETARG_A(cs_.instr_)));
+    Value key(cs_, GETARG_B(cs_.instr_), "rkb");
+    Value value(cs_, GETARG_C(cs_.instr_), "rkc");
+    #ifdef LLL_EXPAND_TABLE_OP
+        TableSet::Compile(cs_, table, key, value);
+    #else
+        auto args = {
+            cs_.values_.state,
+            table.GetTValue(),
+            key.GetTValue(),
+            value.GetTValue()
+        };
+        cs_.CreateCall("LLLSetTable", args);
+    #endif
 }
 
 void Compiler::CompileSetupval() {
@@ -229,7 +257,17 @@ void Compiler::CompileSettable() {
     Value table(cs_, GETARG_A(cs_.instr_), "ra");
     Value key(cs_, GETARG_B(cs_.instr_), "rkb");
     Value value(cs_, GETARG_C(cs_.instr_), "rkc");
-    TableSet::Compile(cs_, table, key, value);
+    #ifdef LLL_EXPAND_TABLE_OP
+        TableSet::Compile(cs_, table, key, value);
+    #else
+        auto args = {
+            cs_.values_.state,
+            table.GetTValue(),
+            key.GetTValue(),
+            value.GetTValue()
+        };
+        cs_.CreateCall("LLLSetTable", args);
+    #endif
 }
 
 void Compiler::CompileNewtable() {
@@ -256,7 +294,17 @@ void Compiler::CompileSelf() {
     Value methodslot(cs_, GETARG_A(cs_.instr_), "ra");
     Value selfslot(cs_, GETARG_A(cs_.instr_) + 1, "ra1");
     selfslot.SetValue(table);
-    TableGet::Compile(cs_, table, key, methodslot);
+    #ifdef LLL_EXPAND_TABLE_OP
+        TableGet::Compile(cs_, table, key, methodslot);
+    #else
+        auto args = {
+            cs_.values_.state,
+            table.GetTValue(),
+            key.GetTValue(),
+            methodslot.GetTValue()
+        };
+        cs_.CreateCall("LLLGetTable", args);
+    #endif
 }
 
 void Compiler::CompileUnop(const std::string& function) {

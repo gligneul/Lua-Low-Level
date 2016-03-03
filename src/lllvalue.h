@@ -39,6 +39,9 @@ public:
     // Constructor that receives a non-const tvalue
     Value(CompilerState& cs, llvm::Value* v);
 
+    // Obtains whether the value isk
+    bool IsK();
+
     // Obtains the tag of the value
     llvm::Value* GetTag();
 

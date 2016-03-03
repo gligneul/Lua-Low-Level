@@ -24,7 +24,8 @@ class Compiler {
 public:
     static const llvm::CodeGenOpt::Level OPT_LEVEL =
             //llvm::CodeGenOpt::None;
-            llvm::CodeGenOpt::Aggressive;
+            llvm::CodeGenOpt::Default;
+            //llvm::CodeGenOpt::Aggressive;
 
     // Constructor, receiver the proto that will be compiled
     Compiler(lua_State* L, Proto* proto);

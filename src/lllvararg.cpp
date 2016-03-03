@@ -23,8 +23,7 @@ Vararg::Vararg(CompilerState& cs) :
     available_(nullptr),
     required_(nullptr),
     nmoves_(nullptr),
-    computenmoves_(cs.CreateSubBlock("computenmoves", entry_)),
-    movecheck_(cs.CreateSubBlock("movecheck", computenmoves_)),
+    movecheck_(cs.CreateSubBlock("movecheck", entry_)),
     move_(cs.CreateSubBlock("move", movecheck_)),
     fillcheck_(cs.CreateSubBlock("fillcheck", move_)),
     fill_(cs.CreateSubBlock("fill", fillcheck_)) {
@@ -49,11 +48,8 @@ void Vararg::ComputeAvailableArgs() {
     auto vasize = B_.CreateIntCast(vadiff, tint, false, "vasize");
     auto numparams1 = cs_.MakeInt(cs_.proto_->numparams + 1);
     auto n = B_.CreateSub(vasize, numparams1, "n");
-
-    // available = max(n, 0)
-    auto nge0 = B_.CreateICmpSGE(n, cs_.MakeInt(0), "n.ge.0");
-    auto nge0int = B_.CreateIntCast(nge0, tint, false, "n.ge.0_int");
-    available_ = B_.CreateMul(nge0int, n, "available");
+    auto n_ge_0 = B_.CreateICmpSGE(n, cs_.MakeInt(0), "n.ge.0");
+    available_ = B_.CreateSelect(n_ge_0, n, cs_.MakeInt(0));
 }
 
 void Vararg::ComputeRequiredArgs() {
@@ -69,31 +65,16 @@ void Vararg::ComputeRequiredArgs() {
 }
 
 void Vararg::ComputeNMoves() {
-    auto requiredmin = cs_.CreateSubBlock("requiredmin", entry_);
-    auto availablemin = cs_.CreateSubBlock("availablemin", requiredmin);
-
     auto required_lt_available = B_.CreateICmpSLT(required_, available_,
             "required.lt.available");
-    B_.CreateCondBr(required_lt_available, requiredmin, availablemin);
-
-    B_.SetInsertPoint(requiredmin);
-    B_.CreateBr(computenmoves_);
-
-    B_.SetInsertPoint(availablemin);
-    B_.CreateBr(computenmoves_);
-
-    B_.SetInsertPoint(computenmoves_);
-    auto nmoves = B_.CreatePHI(cs_.rt_.MakeIntT(sizeof(int)), 2, "nmoves");
-    nmoves->addIncoming(required_, requiredmin);
-    nmoves->addIncoming(available_, availablemin);
-    nmoves_ = nmoves;
+    nmoves_ = B_.CreateSelect(required_lt_available, required_, available_);
     B_.CreateBr(movecheck_);
 }
 
 void Vararg::MoveAvailable() {
     B_.SetInsertPoint(movecheck_);
     auto i = B_.CreatePHI(cs_.rt_.MakeIntT(sizeof(int)), 2, "i");
-    i->addIncoming(cs_.MakeInt(0), computenmoves_);
+    i->addIncoming(cs_.MakeInt(0), entry_);
     i->addIncoming(B_.CreateAdd(i, cs_.MakeInt(1)), move_);
     auto i_lt_nmoves = B_.CreateICmpSLT(i, nmoves_, "i.lt.nmoves");
     B_.CreateCondBr(i_lt_nmoves, move_, fillcheck_);
