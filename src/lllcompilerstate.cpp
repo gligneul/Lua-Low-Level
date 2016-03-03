@@ -72,12 +72,15 @@ void CompilerState::CreateBlocks() {
     builder_.CreateBr(blocks_[0]);
 }
 
-llvm::Value* CompilerState::MakeInt(int value) {
-    return llvm::ConstantInt::get(rt_.MakeIntT(sizeof(int)), value);
+llvm::Value* CompilerState::MakeInt(int value, llvm::Type* type) {
+    if (!type)
+        type = rt_.MakeIntT(sizeof(int));
+    return llvm::ConstantInt::get(type, value);
 }
 
 llvm::Value* CompilerState::ToBool(llvm::Value* value) {
-    return builder_.CreateICmpNE(value, MakeInt(0), value->getName());
+    return builder_.CreateICmpNE(value, MakeInt(0, value->getType()),
+            value->getName() + ".bool");
 }
 
 llvm::Value* CompilerState::InjectPointer(llvm::Type* type, void* ptr) {

@@ -128,6 +128,7 @@ benchmark_util(function()
 	for l in games:gmatch("(.-)\n") do
 	    if #l >= 81 then
             local ret = sd_solve(R, C, l)
+            print(table.concat(ret[1]))
 	    end
 	end
 end)

@@ -64,6 +64,9 @@ public:
     llvm::Value* IsTable();
     llvm::Value* GetTable();
 
+    // GCValue access methods
+    llvm::Value* GetGCValue();
+
 private:
     CompilerState& cs_;
     ConversionType conversion_;

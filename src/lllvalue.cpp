@@ -130,5 +130,14 @@ llvm::Value* Value::GetTable() {
     return cs_.LoadField(GetTValue(), tablet, VALUE_OFFSET, "tablevalue");
 }
 
+llvm::Value* Value::GetGCValue() {
+    auto tgcobject = cs_.rt_.GetType("GCObject");
+    if (isk_) {
+        return cs_.InjectPointer(tgcobject, gcvalue(u_.k));
+    } else {
+        return cs_.LoadField(u_.r, tgcobject, VALUE_OFFSET, "gcvalue");
+    }
+}
+
 }
 

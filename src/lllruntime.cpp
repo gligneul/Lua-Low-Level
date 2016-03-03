@@ -311,6 +311,7 @@ void Runtime::InitTypes() {
     ADDTYPE(LClosure);
     ADDTYPE(Proto);
     ADDTYPE(UpVal);
+    ADDTYPE(GCObject );
     ADDTYPE(Table);
     ADDTYPE(TString);
 
@@ -371,6 +372,15 @@ void Runtime::InitFunctions() {
     ADDFUNCTION(l_mathop(floor), tluanumber, tluanumber);
     ADDFUNCTION(l_mathop(pow), tluanumber, tluanumber, tluanumber);
 
+    // ldo.h
+    ADDFUNCTION(luaD_callnoyield, tvoid, tstate, ttvalue, tint);
+
+    // lfunc.h
+    ADDFUNCTION(luaF_close, tvoid, tstate, ttvalue);
+
+    // lgc.h
+    ADDFUNCTION(luaC_barrierback_, tvoid, tstate, ttable);
+
     // ltable.h
     ADDFUNCTION(luaH_getint, ttvalue, ttable, tluainteger);
     ADDFUNCTION(luaH_getshortstr, ttvalue, ttable, ttstring);
@@ -388,17 +398,13 @@ void Runtime::InitFunctions() {
     ADDFUNCTION(luaV_equalobj, tint, tstate, ttvalue, ttvalue);
     ADDFUNCTION(luaV_finishget, tvoid, tstate, ttvalue, ttvalue, ttvalue,
             ttvalue);
+    ADDFUNCTION(luaV_finishset, tvoid, tstate, ttvalue, ttvalue, ttvalue,
+            ttvalue);
     ADDFUNCTION(luaV_lessequal, tint, tstate, ttvalue, ttvalue);
     ADDFUNCTION(luaV_lessthan, tint, tstate, ttvalue, ttvalue);
     ADDFUNCTION(luaV_mod, tluainteger, tstate, tluainteger, tluainteger);
     ADDFUNCTION(luaV_objlen, tvoid, tstate, ttvalue, ttvalue)
     ADDFUNCTION(luaV_shiftl, tluainteger, tluainteger, tluainteger);
-
-    // ldo.h
-    ADDFUNCTION(luaD_callnoyield, tvoid, tstate, ttvalue, tint);
-
-    // lfunc.h
-    ADDFUNCTION(luaF_close, tvoid, tstate, ttvalue);
 }
 
 void Runtime::AddStructType(const std::string& name, size_t size) {

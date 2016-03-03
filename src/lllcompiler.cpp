@@ -26,6 +26,7 @@
 #include "llllogical.h"
 #include "lllruntime.h"
 #include "llltableget.h"
+#include "llltableset.h"
 #include "lllvalue.h"
 #include "lllvararg.h"
 
@@ -225,13 +226,10 @@ void Compiler::CompileSetupval() {
 }
 
 void Compiler::CompileSettable() {
-    auto args = {
-        cs_.values_.state,
-        cs_.GetValueR(GETARG_A(cs_.instr_), "ra"),
-        cs_.GetValueRK(GETARG_B(cs_.instr_), "rkb"),
-        cs_.GetValueRK(GETARG_C(cs_.instr_), "rkc")
-    };
-    cs_.CreateCall("LLLSetTable", args);
+    Value table(cs_, GETARG_A(cs_.instr_), "ra");
+    Value key(cs_, GETARG_B(cs_.instr_), "rkb");
+    Value value(cs_, GETARG_C(cs_.instr_), "rkc");
+    TableSet::Compile(cs_, table, key, value);
 }
 
 void Compiler::CompileNewtable() {

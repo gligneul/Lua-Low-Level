@@ -43,6 +43,7 @@ MYOBJS= \
 	llllogical.o \
 	lllruntime.o \
 	llltableget.o \
+	llltableset.o \
 	lllvalue.o \
 	lllvararg.o 
 

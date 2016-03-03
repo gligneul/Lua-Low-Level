@@ -58,6 +58,7 @@ void TableGet::CheckTable() {
 }
 
 void TableGet::SwithTag() {
+#if 1
     B_.SetInsertPoint(switchtag_);
     tablevalue_ = table_.GetTable();
     auto s = B_.CreateSwitch(key_.GetTag(), getany_, 4);
@@ -68,6 +69,11 @@ void TableGet::SwithTag() {
     AddCase(ctb(LUA_TSHRSTR), getshrstr_);
     AddCase(ctb(LUA_TLNGSTR), getlngstr_);
     AddCase(LUA_TNIL, searchtm_);
+#else
+    B_.SetInsertPoint(switchtag_);
+    tablevalue_ = table_.GetTable();
+    B_.CreateBr(getany_);
+#endif
 }
 
 void TableGet::PerformGet() {
