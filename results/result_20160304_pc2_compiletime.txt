@@ -1,0 +1,104 @@
+Distro: Fedora release 21 (Twenty One)
+Kernel: 4.1.6-100.fc21.x86_64
+CPU:    Intel(R) Core(TM) i5-3317U CPU @ 1.70GHz
+
+Module: benchmarks/floatarith.lua
+     avg        stddev
+Lua: 1.37496	0.01558	(1.13325%)
+LLL: 0.52216	0.01731	(3.31510%)
+     0.380 time
+
+Compilation time: 0.00700	0.00000	(0.00000%)
+
+----------
+
+Module: benchmarks/heapsort.lua
+     avg        stddev
+Lua: 1.61744	0.02070	(1.27970%)
+LLL: 0.64612	0.02435	(3.76845%)
+     0.399 time
+
+Compilation time: 0.08720	0.01689	(19.37417%)
+
+----------
+
+Module: benchmarks/increment.lua
+     avg        stddev
+Lua: 1.38940	0.03289	(2.36693%)
+LLL: 0.55740	0.01671	(2.99843%)
+     0.401 time
+
+Compilation time: 0.00704	0.00020	(2.84091%)
+
+----------
+
+Module: benchmarks/loopsum.lua
+     avg        stddev
+Lua: 1.34720	0.02969	(2.20384%)
+LLL: 0.56396	0.02021	(3.58328%)
+     0.419 time
+
+Compilation time: 0.00800	0.00000	(0.00000%)
+
+----------
+
+Module: benchmarks/mandelbrot.lua
+     avg        stddev
+Lua: 3.57572	0.01986	(0.55538%)
+LLL: 1.14492	0.01959	(1.71117%)
+     0.320 time
+
+Compilation time: 0.06112	0.01204	(19.70337%)
+
+----------
+
+Module: benchmarks/matmul.lua
+     avg        stddev
+Lua: 1.38752	0.05055	(3.64304%)
+LLL: 0.53796	0.01361	(2.53032%)
+     0.388 time
+
+Compilation time: 0.05456	0.01104	(20.23807%)
+
+----------
+
+Module: benchmarks/qt.lua
+     avg        stddev
+Lua: 4.67796	0.02703	(0.57772%)
+LLL: 2.41472	0.02898	(1.20011%)
+     0.516 time
+
+Compilation time: 0.31908	0.01375	(4.30943%)
+
+----------
+
+Module: benchmarks/queen.lua
+     avg        stddev
+Lua: 1.47252	0.01901	(1.29122%)
+LLL: 0.45304	0.02438	(5.38213%)
+     0.308 time
+
+Compilation time: 0.04612	0.01571	(34.06717%)
+
+----------
+
+Module: benchmarks/sieve.lua
+     avg        stddev
+Lua: 3.35992	0.12652	(3.76556%)
+LLL: 1.04728	0.04386	(4.18773%)
+     0.312 time
+
+Compilation time: 0.03272	0.00068	(2.07284%)
+
+----------
+
+Module: benchmarks/sudoku.lua
+     avg        stddev
+Lua: 1.01080	0.02151	(2.12837%)
+LLL: 0.68544	0.01710	(2.49409%)
+     0.678 time
+
+Compilation time: 0.33884	0.01716	(5.06369%)
+
+----------
+

@@ -9,6 +9,10 @@ return function(f)
     lll.setAutoCompileEnable(false)
     if arg[1] == '--lll' then
         assert(lll.compile(f))
+        f()
+    elseif arg[1] == '--lll-compile-only' then
+        assert(lll.compile(f))
+    else
+        f()
     end
-    f()
 end

@@ -8,7 +8,7 @@
 # Execute each benchmark modules with and prints the Lua Interpreter and 
 # the LLL time
 
-n_tests=10
+n_tests=25
 
 modules_prefix='benchmarks/'
 modules=(
@@ -52,6 +52,7 @@ for m in "${modules[@]}"; do
     path="$modules_prefix""$m""$modules_suffix"
     luatime=`benchmark ./src/lua $path`
     llltime=`benchmark ./src/lua $path --lll`
+    compilationtime=`benchmark ./src/lua $path --lll-compile-only`
     echo "Module: $path"
     echo "     avg        stddev"
     echo "Lua: $luatime"
@@ -60,5 +61,7 @@ for m in "${modules[@]}"; do
     luatime=`echo $luatime | sed 's/ .*//'`
     llltime=`echo $llltime | sed 's/ .*//'`
     printf "     %.3f time\n\n" `echo "$llltime / $luatime" | bc -l`
+
+    printf "Compilation time: %s\n\n----------\n\n" "$compilationtime"
 done
 
