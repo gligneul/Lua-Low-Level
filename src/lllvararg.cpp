@@ -43,7 +43,8 @@ void Vararg::ComputeAvailableArgs() {
     B_.SetInsertPoint(entry_);
     auto func = cs_.LoadField(cs_.values_.ci, cs_.rt_.GetType("TValue"),
             offsetof(CallInfo, func), "func");
-    auto vadiff = B_.CreatePtrDiff(cs_.values_.base, func, "vadiff");
+    auto base = cs_.GetValueR(0, "base");
+    auto vadiff = B_.CreatePtrDiff(base, func, "vadiff");
     auto tint = cs_.rt_.MakeIntT(sizeof(int));
     auto vasize = B_.CreateIntCast(vadiff, tint, false, "vasize");
     auto numparams1 = cs_.MakeInt(cs_.proto_->numparams + 1);
@@ -81,7 +82,8 @@ void Vararg::MoveAvailable() {
 
     B_.SetInsertPoint(move_);
     auto vidx = B_.CreateSub(i, available_, "valueidx");
-    auto v = B_.CreateGEP(cs_.values_.base, vidx, "value");
+    auto base = cs_.GetValueR(0, "base");
+    auto v = B_.CreateGEP(base, vidx, "value");
     auto r = GetRegisterFromA(i);
     cs_.SetRegister(r, v);
     B_.CreateBr(movecheck_);
@@ -104,7 +106,8 @@ void Vararg::FillRequired() {
 llvm::Value* Vararg::GetRegisterFromA(llvm::Value* offset) {
     auto a = cs_.MakeInt(GETARG_A(cs_.instr_));
     auto idx = B_.CreateAdd(a, offset, "idx");
-    return B_.CreateGEP(cs_.values_.base, idx, "register");
+    auto base = cs_.GetValueR(0, "base");
+    return B_.CreateGEP(base, idx, "register");
 }
 
 }

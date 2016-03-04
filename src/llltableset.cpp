@@ -146,6 +146,7 @@ void TableSet::FinishSet() {
         CreatePHI(ttvalue, oldvals_, "oldval")
     };
     cs_.CreateCall("luaV_finishset", args);
+    cs_.UpdateStack();
     B_.CreateBr(exit_);
 }
 

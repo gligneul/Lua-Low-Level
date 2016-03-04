@@ -56,11 +56,17 @@ void CompilerState::CreateBlocks() {
 
     auto entry = llvm::BasicBlock::Create(context_, "entry", function_);
     builder_.SetInsertPoint(entry);
-    values_.ci = LoadField(values_.state, rt_.GetType("CallInfo"),
-            offsetof(lua_State, ci), "ci");
-    auto luanumbert = rt_.GetType("lua_Number");
-    values_.bnumber = builder_.CreateAlloca(luanumbert, nullptr, "bnumber");
-    values_.cnumber = builder_.CreateAlloca(luanumbert, nullptr, "cnumber");
+
+    auto tci = rt_.GetType("CallInfo");
+    values_.ci = LoadField(values_.state, tci, offsetof(lua_State, ci), "ci");
+
+    auto tluanumber = rt_.GetType("lua_Number");
+    values_.bnumber = builder_.CreateAlloca(tluanumber, nullptr, "bnumber");
+    values_.cnumber = builder_.CreateAlloca(tluanumber, nullptr, "cnumber");
+
+    auto ttvalue = rt_.GetType("TValue");
+    values_.base = builder_.CreateAlloca(ttvalue, nullptr, "base");
+    UpdateStack();
 
     for (size_t i = 0; i < blocks_.size(); ++i) {
         auto instruction = luaP_opnames[GET_OPCODE(proto_->code[i])];
@@ -111,12 +117,14 @@ void CompilerState::SetField(llvm::Value* strukt, llvm::Value* fieldvalue,
 }
 
 llvm::Value* CompilerState::GetValueR(int arg, const std::string& name) {
-    return builder_.CreateGEP(values_.base, MakeInt(arg), name);
+    auto base = builder_.CreateLoad(values_.base);
+    return builder_.CreateGEP(base, MakeInt(arg), name);
 }
 
 llvm::Value* CompilerState::GetValueK(int arg, const std::string& name) {
     // Since the value is a constant, llvm ignores the name representation
     // TODO: remove name parameter
+    // TODO: use global variables
     (void)name;
     return InjectPointer(rt_.GetType("TValue"), proto_->k + arg);
 }
@@ -148,8 +156,9 @@ void CompilerState::SetRegister(llvm::Value* reg, llvm::Value* value) {
 }
 
 void CompilerState::UpdateStack() {
-    values_.base = LoadField(values_.ci, rt_.GetType("TValue"),
-            offsetof(CallInfo, u.l.base), "base");
+    auto base = LoadField(values_.ci, rt_.GetType("TValue"),
+            offsetof(CallInfo, u.l.base), "u.l.base");
+    builder_.CreateStore(base, values_.base);
 }
 
 void CompilerState::ReloadTop() {

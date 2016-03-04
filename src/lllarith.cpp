@@ -121,6 +121,7 @@ void Arith::ComputeTaggedMethod() {
         cs_.MakeInt(GetMethodTag())
     };
     cs_.CreateCall("luaT_trybinTM", args);
+    cs_.UpdateStack();
     B_.CreateBr(exit_);
 }
 

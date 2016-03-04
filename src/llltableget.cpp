@@ -140,6 +140,7 @@ void TableGet::FinishGet() {
         CreatePHI(ttvalue, tms_, "tmphi")
     };
     cs_.CreateCall("luaV_finishget", args);
+    cs_.UpdateStack();
     B_.CreateBr(exit_);
 }
 

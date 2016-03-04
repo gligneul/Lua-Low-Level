@@ -9,8 +9,10 @@
 
 #include <llvm/ADT/StringRef.h>
 #include <llvm/IR/Verifier.h>
+#include <llvm/PassManager.h>
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Support/TargetSelect.h>
+#include <llvm/Transforms/Scalar.h>
 
 #define LLL_USE_MCJIT
 #define LLL_EXPAND_TABLE_OP
@@ -72,7 +74,6 @@ void Compiler::CompileInstructions() {
     for (cs_.curr_ = 0; cs_.curr_ < cs_.proto_->sizecode; ++cs_.curr_) {
         cs_.builder_.SetInsertPoint(cs_.blocks_[cs_.curr_]);
         cs_.instr_ = cs_.proto_->code[cs_.curr_];
-        cs_.UpdateStack();
         //cs_.DebugPrint(luaP_opnames[GET_OPCODE(cs_.instr_)]);
         switch (GET_OPCODE(cs_.instr_)) {
             case OP_MOVE:     CompileMove(); break;
@@ -131,6 +132,11 @@ bool Compiler::VerifyModule() {
 
 bool Compiler::CreateEngine() {
     auto module = cs_.module_.get();
+
+    llvm::FunctionPassManager fpm(module);
+    fpm.add(llvm::createPromoteMemoryToRegisterPass());
+    fpm.run(*cs_.function_);
+
     auto engine = llvm::EngineBuilder(cs_.module_.release())
             .setErrorStr(&error_)
             .setOptLevel(OPT_LEVEL)
@@ -141,6 +147,7 @@ bool Compiler::CreateEngine() {
             .setUseMCJIT(false)
 #endif
             .create();
+
     if (engine) {
         engine->finalizeObject();
         engine_.reset(new Engine(engine, module, cs_.function_));
@@ -314,6 +321,7 @@ void Compiler::CompileUnop(const std::string& function) {
         cs_.GetValueRK(GETARG_B(cs_.instr_), "rkb")
     };
     cs_.CreateCall(function, args);
+    cs_.UpdateStack();
 }
 
 void Compiler::CompileConcat() {
@@ -323,13 +331,14 @@ void Compiler::CompileConcat() {
     cs_.SetTop(c + 1);
     auto args = {cs_.values_.state, cs_.MakeInt(c - b + 1)};
     cs_.CreateCall("luaV_concat", args);
+    cs_.UpdateStack();
 
     auto ra = cs_.GetValueR(a, "ra");
     auto rb = cs_.GetValueR(b, "rb");
     cs_.SetRegister(ra, rb);
 
     if (a >= b)
-        CompileCheckcg(cs_.GetValueR(a + 1, "ra_next"));
+        CompileCheckcg(cs_.GetValueR(a + 1, "ra1"));
     else
         CompileCheckcg(rb);
 
@@ -346,6 +355,7 @@ void Compiler::CompileCmp(const std::string& function) {
         cs_.GetValueRK(GETARG_B(cs_.instr_), "rkb"),
         cs_.GetValueRK(GETARG_C(cs_.instr_), "rkc")
     };
+    cs_.UpdateStack();
     auto result = cs_.CreateCall(function, args, "result");
     auto a = cs_.MakeInt(GETARG_A(cs_.instr_));
     auto cmp = cs_.builder_.CreateICmpNE(result, a, "cmp");
@@ -388,12 +398,14 @@ void Compiler::CompileCall() {
         cs_.MakeInt(GETARG_C(cs_.instr_) - 1)
     };
     cs_.CreateCall("luaD_callnoyield", args);
+    cs_.UpdateStack();
 }
 
 void Compiler::CompileTailcall() {
     // Tailcall returns a negative value that signals the call must be performed
+    auto base = cs_.GetValueR(0, "base");
     if (cs_.proto_->sizep > 0)
-        cs_.CreateCall("luaF_close", {cs_.values_.state, cs_.values_.base});
+        cs_.CreateCall("luaF_close", {cs_.values_.state, base});
     int a = GETARG_A(cs_.instr_);
     int b = GETARG_B(cs_.instr_);
     if (b != 0)
@@ -404,8 +416,9 @@ void Compiler::CompileTailcall() {
 }
 
 void Compiler::CompileReturn() {
+    auto base = cs_.GetValueR(0, "base");
     if (cs_.proto_->sizep > 0)
-        cs_.CreateCall("luaF_close", {cs_.values_.state, cs_.values_.base});
+        cs_.CreateCall("luaF_close", {cs_.values_.state, base});
     int a = GETARG_A(cs_.instr_);
     int b = GETARG_B(cs_.instr_);
     llvm::Value* nresults = nullptr;
@@ -446,6 +459,7 @@ void Compiler::CompileTforcall() {
         cs_.MakeInt(GETARG_C(cs_.instr_))
     };
     cs_.CreateCall("luaD_callnoyield", args);
+    cs_.UpdateStack();
     cs_.ReloadTop();
 }
 
@@ -486,7 +500,7 @@ void Compiler::CompileClosure() {
     auto args = {
         cs_.values_.state,
         cs_.values_.closure,
-        cs_.values_.base,
+        cs_.GetValueR(0, "base"),
         cs_.GetValueR(GETARG_A(cs_.instr_), "ra"),
         cs_.MakeInt(GETARG_Bx(cs_.instr_))
     };
