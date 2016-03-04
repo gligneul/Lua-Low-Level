@@ -1,0 +1,104 @@
+Distro: CentOS release 6.6 (Final)
+Kernel: 2.6.32-504.30.3.el6.x86_64
+CPU:    Intel(R) Core(TM) i7-4770 CPU @ 3.40GHz
+
+Module: benchmarks/floatarith.lua
+     avg        stddev
+Lua: 0.74204	0.00165	(0.22171%)
+LLL: 0.29264	0.00180	(0.61509%)
+     0.394 time
+
+Compilation time: 0.00876	0.00222	(25.37227%)
+
+----------
+
+Module: benchmarks/heapsort.lua
+     avg        stddev
+Lua: 0.71724	0.00677	(0.94328%)
+LLL: 0.40792	0.00305	(0.74867%)
+     0.569 time
+
+Compilation time: 0.06272	0.00061	(0.97853%)
+
+----------
+
+Module: benchmarks/increment.lua
+     avg        stddev
+Lua: 0.75144	0.00299	(0.39753%)
+LLL: 0.26720	0.00216	(0.80848%)
+     0.356 time
+
+Compilation time: 0.00796	0.00254	(31.92208%)
+
+----------
+
+Module: benchmarks/loopsum.lua
+     avg        stddev
+Lua: 0.76332	0.00340	(0.44542%)
+LLL: 0.29332	0.00090	(0.30683%)
+     0.384 time
+
+Compilation time: 0.00856	0.00260	(30.36634%)
+
+----------
+
+Module: benchmarks/mandelbrot.lua
+     avg        stddev
+Lua: 0.94384	0.00788	(0.83519%)
+LLL: 0.53652	0.00164	(0.30494%)
+     0.568 time
+
+Compilation time: 0.04764	0.00076	(1.58940%)
+
+----------
+
+Module: benchmarks/matmul.lua
+     avg        stddev
+Lua: 0.66700	0.01093	(1.63892%)
+LLL: 0.36280	0.02260	(6.22977%)
+     0.544 time
+
+Compilation time: 0.04256	0.00173	(4.07419%)
+
+----------
+
+Module: benchmarks/qt.lua
+     avg        stddev
+Lua: 2.46532	0.06090	(2.47018%)
+LLL: 1.60660	0.01857	(1.15556%)
+     0.652 time
+
+Compilation time: 0.23800	0.00163	(0.68613%)
+
+----------
+
+Module: benchmarks/queen.lua
+     avg        stddev
+Lua: 0.48712	0.00784	(1.60917%)
+LLL: 0.27688	0.00438	(1.58228%)
+     0.568 time
+
+Compilation time: 0.03016	0.00128	(4.24610%)
+
+----------
+
+Module: benchmarks/sieve.lua
+     avg        stddev
+Lua: 1.26428	0.01095	(0.86631%)
+LLL: 0.72156	0.01266	(1.75443%)
+     0.571 time
+
+Compilation time: 0.02660	0.00091	(3.43185%)
+
+----------
+
+Module: benchmarks/sudoku.lua
+     avg        stddev
+Lua: 0.38972	0.00279	(0.71632%)
+LLL: 0.46740	0.00492	(1.05177%)
+     1.199 time
+
+Compilation time: 0.27156	0.00375	(1.38226%)
+
+----------
+
