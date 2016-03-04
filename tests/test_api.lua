@@ -7,23 +7,24 @@
 -- test_api.lua
 
 -- Auto compilation (ac) is enable by default
-assert(lll.getautocompile() == true)
+assert(lll.isAutoCompileEnable() == true)
 
 -- Tests ac
 local function f() return 123 end
-assert(lll.iscompiled(f) == false)
-for i = 1, 51 do f() end
-assert(lll.iscompiled(f) == true)
+assert(lll.isCompiled(f) == false)
+assert(lll.getCallsToCompile() == 2)
+for i = 1, lll.getCallsToCompile() do f() end
+assert(lll.isCompiled(f) == true)
 
 -- Disables ac
-lll.setautocompile(false)
-assert(lll.getautocompile() == false)
+lll.setAutoCompileEnable(false)
+assert(lll.isAutoCompileEnable() == false)
 
 -- Checks if ac is disabled
 local function g() return 'abc' end
-assert(lll.iscompiled(g) == false)
-for i = 1, 51 do g() end
-assert(lll.iscompiled(g) == false)
+assert(lll.isCompiled(g) == false)
+for i = 1, lll.getCallsToCompile() do g() end
+assert(lll.isCompiled(g) == false)
 
 -- Tests manual compilation
 local ok, err = lll.compile(f)
@@ -32,6 +33,16 @@ assert(lll.compile(g))
 ok, err = lll.compile(g)
 assert(ok == false and err == 'Function already compiled')
 
+-- Change calls to compile
+lll.setAutoCompileEnable(true)
+local function h() return 'qwe' end
+assert(lll.isCompiled(h) == false)
+lll.setCallsToCompile(10)
+for i = 1, 2 do h() end
+assert(lll.isCompiled(h) == false)
+for i = 3, lll.getCallsToCompile() do h() end
+assert(lll.isCompiled(h) == true)
+
 -- Execute compiled functions
-assert(f() == 123 and g() == 'abc')
+assert(f() == 123 and g() == 'abc' and h() == 'qwe')
 

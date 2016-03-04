@@ -18,7 +18,9 @@ modules=(
     'loopsum.lua'
     'mandelbrot.lua'
     'matmul.lua'
+    'qt.lua'
     'queen.lua'
+    'sieve.lua'
     'sudoku.lua'
 )
 

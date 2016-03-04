@@ -56,7 +56,7 @@ end
 ---   args
 ---     List of arguments that will be passed to the functions
 return function(functions, arguments)
-    lll.setautocompile(false)
+    lll.setAutoCompileEnable(false)
     local nf = 0
     local nc = 0
     for _, fstr in ipairs(functions) do

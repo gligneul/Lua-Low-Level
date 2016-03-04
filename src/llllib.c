@@ -45,14 +45,25 @@ static int lll_compile (lua_State *L) {
     }
 }
 
-static int lll_setautocompile (lua_State *L) {
+static int lll_setautocompileenable (lua_State *L) {
     luaL_checktype(L, 1, LUA_TBOOLEAN);
-    LLLSetAutoCompile(lua_toboolean(L, 1));
+    LLLSetAutoCompileEnable(lua_toboolean(L, 1));
     return 0;
 }
 
-static int lll_getautocompile (lua_State *L) {
-    lua_pushboolean(L, LLLGetAutoCompile());
+static int lll_isautocompileenable (lua_State *L) {
+    lua_pushboolean(L, LLLIsAutoCompileEnable());
+    return 1;
+}
+
+static int lll_setcallstocompile (lua_State *L) {
+    luaL_checktype(L, 1, LUA_TNUMBER);
+    LLLSetCallsToCompile(lua_tointeger(L, 1));
+    return 0;
+}
+
+static int lll_getcallstocompile (lua_State *L) {
+    lua_pushinteger(L, LLLGetCallsToCompile());
     return 1;
 }
 
@@ -77,9 +88,11 @@ static int lll_write (lua_State *L) {
 
 static const luaL_Reg lib_f[] = {
     {"compile", lll_compile},
-    {"setautocompile", lll_setautocompile},
-    {"getautocompile", lll_getautocompile},
-    {"iscompiled", lll_iscompiled},
+    {"setAutoCompileEnable", lll_setautocompileenable},
+    {"isAutoCompileEnable", lll_isautocompileenable},
+    {"setCallsToCompile", lll_setcallstocompile},
+    {"getCallsToCompile", lll_getcallstocompile},
+    {"isCompiled", lll_iscompiled},
     {"dump", lll_dump},
     {"write", lll_write},
     {NULL, NULL}

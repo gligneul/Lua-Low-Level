@@ -1,9 +1,15 @@
+-- LLL - Lua Low Level
+-- September, 2015
+-- Author: Gabriel de Quadros Ligneul
+-- Copyright Notice for LLL: see lllcore.h
+--
+-- Obtained at:
 -- qt.lua,15 (one edge vector)
 -- Julia sets via interval cell-mapping (quadtree version)
 
---require"julia" local f=f
+local benchmark_util = require 'benchmarks/util'
 
---lll.setautocompile(false)
+benchmark_util(function()
 
 local io=io
 local root,exterior
@@ -304,3 +310,5 @@ end
 
 -- julia (level, a, b) -- julia set de c= a + b i
 julia(10,-0.25, 0.74)
+
+end)

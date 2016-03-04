@@ -35,11 +35,6 @@
 #include "lstate.h"
 #include "lobject.h"
 
-/* Number of calls necessary to auto-compile */
-#ifndef LLL_CALLS_TO_COMPILE 
-#define LLL_CALLS_TO_COMPILE 50
-#endif
-
 /* Compiles a function and attachs it to the proto
 ** In success returns 0, else returns 1
 ** If errmsg != NULL also returns the error message (must be freed) */
@@ -49,10 +44,16 @@ int LLLCompile (lua_State *L, Proto *p, char **errmsg);
 int LLLCompileAll (lua_State *L, Proto *p, char **errmsg);
 
 /* Enables or disables the auto compilation */
-void LLLSetAutoCompile (int autocompile);
+void LLLSetAutoCompileEnable (int enable);
 
 /* Returns whether the auto compilation is enable */
-int LLLGetAutoCompile();
+int LLLIsAutoCompileEnable();
+
+/* Sets the number of calls required to auto-compile a function (default = 2) */
+void LLLSetCallsToCompile (int calls);
+
+/* Obtains the number of calls required to auto-compile a function */
+int LLLGetCallsToCompile();
 
 /* Returns whether the function is compiled */
 int LLLIsCompiled (Proto *p);
@@ -63,7 +64,7 @@ void LLLFreeEngine (lua_State *L, Proto *p);
 /* Dumps the LLMV function (debug) */
 void LLLDump (Proto *p);
 
-/* Writes the bytecode and the asm of $p to $path */
+/* Writes the bytecode and the asm of $p to $path (debug) */
 void LLLWrite (Proto *p, const char *path);
 
 #endif

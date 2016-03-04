@@ -389,8 +389,8 @@ int luaD_precall (lua_State *L, StkId func, int nresults) {
         callhook(L, ci);
 
       /* LLL auto compilation and execution */
-      if (LLLGetAutoCompile() && !LLLIsCompiled(p)
-          && ++p->ncalls > LLL_CALLS_TO_COMPILE)
+      if (LLLIsAutoCompileEnable() && !LLLIsCompiled(p)
+          && ++p->ncalls >= LLLGetCallsToCompile())
         LLLCompile(L, p, NULL);
       if (p->lllfunction) {
         int n = p->lllfunction(L, clLvalue(func));

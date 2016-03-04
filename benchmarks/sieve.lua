@@ -1,8 +1,18 @@
+-- LLL - Lua Low Level
+-- September, 2015
+-- Author: Gabriel de Quadros Ligneul
+-- Copyright Notice for LLL: see lllcore.h
+--
+-- Obtained at:
 -- $Id: sieve.lua,v 1.9 2001/05/06 04:37:45 doug Exp $
 -- http://www.bagley.org/~doug/shootout/
 --
 -- Roberto Ierusalimschy pointed out the for loop is much
 -- faster for our purposes here than using a while loop.
+
+local benchmark_util = require 'benchmarks/util'
+
+benchmark_util(function()
 
 local count = 0
 
@@ -25,9 +35,13 @@ function main(num, lim)
     end
 end
 
-NUM = tonumber((arg and arg[1])) or 100
-lim = (arg and arg[2]) or 8192 
+--NUM = tonumber((arg and arg[1])) or 100
+--lim = (arg and arg[2]) or 8192 
+NUM = 1000
+lim = 20000
 print(NUM,lim)
 count = 0
 main(NUM, lim)
 print("Count: ", count)
+
+end)

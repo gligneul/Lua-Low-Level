@@ -9,8 +9,6 @@ benchmark_util(function()
 
 local N = tonumber(11)    -- board size
 
-lll.setautocompile(false)
-
 -- check whether position (n,c) is free from attacks
 local function isplaceok (a, n, c)
   for i = 1, n - 1 do   -- for each queen already placed

@@ -29,6 +29,7 @@ extern "C" {
     p->lllfunction = reinterpret_cast<LLLFunction>(engine->GetFunction()); }
 
 static int autocompile_ = 1;
+static int callstocompile_ = 2;
 
 void writeerror (lua_State *L, char **outerr, const char *err) {
     if (outerr) {
@@ -62,12 +63,20 @@ int LLLCompileAll (lua_State *L, Proto *p, char **errmsg) {
     return 0;
 }
 
-void LLLSetAutoCompile (int autocompile) {
-    autocompile_ = autocompile;
+void LLLSetAutoCompileEnable (int enable) {
+    autocompile_ = enable;
 }
 
-int LLLGetAutoCompile() {
+int LLLIsAutoCompileEnable() {
     return autocompile_;
+}
+
+void LLLSetCallsToCompile (int calls) {
+    callstocompile_ = calls;
+}
+
+int LLLGetCallsToCompile() {
+    return callstocompile_;
 }
 
 int LLLIsCompiled (Proto *p) {
