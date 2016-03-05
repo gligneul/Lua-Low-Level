@@ -8,7 +8,7 @@
 # Execute each benchmark modules with and prints the Lua Interpreter and 
 # the LLL time
 
-n_tests=25
+n_tests=20
 
 modules_prefix='benchmarks/'
 modules=(
@@ -42,6 +42,10 @@ function benchmark {
     printf "%.5f\t%.5f\t(%.5f%%)" "$avg" "$s" "$sp"
 }
 
+function getfirst {
+    echo "$1"
+}
+
 echo "Distro: "`cat /etc/*-release | head -1`
 echo "Kernel: "`uname -r`
 echo "CPU:    "`cat /proc/cpuinfo | grep 'model name' | tail -1 | \
@@ -54,14 +58,15 @@ for m in "${modules[@]}"; do
     llltime=`benchmark ./src/lua $path --lll`
     compilationtime=`benchmark ./src/lua $path --lll-compile-only`
     echo "Module: $path"
-    echo "     avg        stddev"
-    echo "Lua: $luatime"
-    echo "LLL: $llltime"
+    echo "             avg        stddev"
+    echo "Lua:         $luatime"
+    echo "LLL:         $llltime"
+    echo "compilation: $compilationtime"
 
-    luatime=`echo $luatime | sed 's/ .*//'`
-    llltime=`echo $llltime | sed 's/ .*//'`
-    printf "     %.3f time\n\n" `echo "$llltime / $luatime" | bc -l`
-
-    printf "Compilation time: %s\n\n----------\n\n" "$compilationtime"
+    luat=`getfirst $luatime`
+    lllt=`getfirst $llltime`
+    compt=`getfirst $compilationtime`
+    diff=`echo "( $lllt - $compt ) / $luat" | bc -l`
+    printf "            %.3f time\n\n" $diff
 done
 

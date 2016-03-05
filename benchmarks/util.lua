@@ -12,6 +12,9 @@ return function(f)
         f()
     elseif arg[1] == '--lll-compile-only' then
         assert(lll.compile(f))
+    elseif arg[1] == '--dump' then
+        assert(lll.compile(f))
+        lll.dump(f)
     else
         f()
     end
