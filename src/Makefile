@@ -41,6 +41,7 @@ MYOBJS= \
 	lllengine.o \
 	llllib.o \
 	llllogical.o \
+	lllopcode.o \
 	lllruntime.o \
 	llltableget.o \
 	llltableset.o \

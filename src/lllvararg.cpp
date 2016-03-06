@@ -8,6 +8,7 @@
 */
 
 #include "lllvararg.h"
+#include "lllcompilerstate.h"
 
 extern "C" {
 #include "lprefix.h"
@@ -29,14 +30,12 @@ Vararg::Vararg(CompilerState& cs) :
     fill_(cs.CreateSubBlock("fill", fillcheck_)) {
 }
 
-std::vector<Vararg::CompilationStep> Vararg::GetSteps() {
-    return {
-        &Vararg::ComputeAvailableArgs,
-        &Vararg::ComputeRequiredArgs,
-        &Vararg::ComputeNMoves,
-        &Vararg::MoveAvailable,
-        &Vararg::FillRequired
-    };
+void Vararg::Compile() {
+    ComputeAvailableArgs();
+    ComputeRequiredArgs();
+    ComputeNMoves();
+    MoveAvailable();
+    FillRequired();
 }
 
 void Vararg::ComputeAvailableArgs() {

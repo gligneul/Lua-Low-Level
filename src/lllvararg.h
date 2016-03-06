@@ -11,17 +11,19 @@
 #ifndef LLLVARARG_H
 #define LLLVARARG_H
 
+#include <memory>
+
 #include "lllopcode.h"
 
 namespace lll {
 
-class Vararg : public Opcode<Vararg> {
+class Vararg : public Opcode {
 public:
     // Constructor
     Vararg(CompilerState& cs);
 
-    // Returns the list of steps
-    std::vector<CompilationStep> GetSteps();
+    // Compiles the opcode
+    void Compile();
 
 private:
     // Compilation steps

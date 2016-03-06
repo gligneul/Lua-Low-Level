@@ -15,7 +15,6 @@
 #include <llvm/Transforms/Scalar.h>
 
 #define LLL_USE_MCJIT
-#define LLL_EXPAND_TABLE_OP
 
 #ifdef LLL_USE_MCJIT
 #include <llvm/ExecutionEngine/MCJIT.h>
@@ -58,8 +57,10 @@ Compiler::Compiler(lua_State* L, Proto* proto) :
 }
 
 bool Compiler::Compile() {
-    CompileInstructions();
-    return VerifyModule() && CreateEngine();
+    return CompileInstructions() &&
+           VerifyModule() &&
+           OptimizeModule() &&
+           CreateEngine();
 }
 
 const std::string& Compiler::GetErrorMessage() {
@@ -70,7 +71,7 @@ Engine* Compiler::GetEngine() {
     return engine_.release();
 }
 
-void Compiler::CompileInstructions() {
+bool Compiler::CompileInstructions() {
     for (cs_.curr_ = 0; cs_.curr_ < cs_.proto_->sizecode; ++cs_.curr_) {
         cs_.builder_.SetInsertPoint(cs_.blocks_[cs_.curr_]);
         cs_.instr_ = cs_.proto_->code[cs_.curr_];
@@ -90,10 +91,10 @@ void Compiler::CompileInstructions() {
             case OP_NEWTABLE: CompileNewtable(); break;
             case OP_SELF:     CompileSelf(); break;
             case OP_ADD: case OP_SUB: case OP_MUL: case OP_MOD: case OP_POW:  
-            case OP_DIV: case OP_IDIV: 
-                              Arith::Compile(cs_); break;
+            case OP_DIV: case OP_IDIV:
+                              Arith(cs_).Compile(); break;
             case OP_BAND: case OP_BOR: case OP_BXOR: case OP_SHL: case OP_SHR:
-                              Logical::Compile(cs_); break;
+                              Logical(cs_).Compile(); break;
             case OP_UNM:      CompileUnop("lll_unm"); break;
             case OP_BNOT:     CompileUnop("lll_bnot"); break;
             case OP_NOT:      CompileUnop("lll_not"); break;
@@ -114,12 +115,13 @@ void Compiler::CompileInstructions() {
             case OP_TFORLOOP: CompileTforloop(); break;
             case OP_SETLIST:  CompileSetlist(); break;
             case OP_CLOSURE:  CompileClosure(); break;
-            case OP_VARARG:   Vararg::Compile(cs_); break;
+            case OP_VARARG:   Vararg(cs_).Compile(); break;
             case OP_EXTRAARG: /* ignored */ break;
         }
         if (!cs_.blocks_[cs_.curr_]->getTerminator())
             cs_.builder_.CreateBr(cs_.blocks_[cs_.curr_ + 1]);
     }
+    return true;
 }
 
 bool Compiler::VerifyModule() {
@@ -130,13 +132,15 @@ bool Compiler::VerifyModule() {
     return !err;
 }
 
-bool Compiler::CreateEngine() {
-    auto module = cs_.module_.get();
-
-    llvm::FunctionPassManager fpm(module);
+bool Compiler::OptimizeModule() {
+    llvm::FunctionPassManager fpm(cs_.module_.get());
     fpm.add(llvm::createPromoteMemoryToRegisterPass());
     fpm.run(*cs_.function_);
+    return true;
+}
 
+bool Compiler::CreateEngine() {
+    auto module = cs_.module_.get();
     auto engine = llvm::EngineBuilder(cs_.module_.release())
             .setErrorStr(&error_)
             .setOptLevel(OPT_LEVEL)
@@ -158,25 +162,22 @@ bool Compiler::CreateEngine() {
 }
 
 void Compiler::CompileMove() {
-    auto ra = cs_.GetValueR(GETARG_A(cs_.instr_), "ra");
-    auto rb = cs_.GetValueR(GETARG_B(cs_.instr_), "rb");
-    cs_.SetRegister(ra, rb);
+    Register ra(cs_, GETARG_A(cs_.instr_), "ra");
+    Register rb(cs_, GETARG_B(cs_.instr_), "rb");
+    ra.Assign(rb);
 }
 
 void Compiler::CompileLoadk(bool extraarg) {
-    int kposition = extraarg ? GETARG_Ax(cs_.proto_->code[cs_.curr_ + 1])
-                             : GETARG_Bx(cs_.instr_);
-    auto ra = cs_.GetValueR(GETARG_A(cs_.instr_), "ra");
-    auto k = cs_.GetValueK(kposition, "k");
-    cs_.SetRegister(ra, k);
+    Register ra(cs_, GETARG_A(cs_.instr_), "ra");
+    int karg = extraarg ? GETARG_Ax(cs_.proto_->code[cs_.curr_ + 1])
+                        : GETARG_Bx(cs_.instr_);
+    Constant k(cs_, karg)
+    ra.Assign(k);
 }
 
 void Compiler::CompileLoadbool() {
-    auto ra = cs_.GetValueR(GETARG_A(cs_.instr_), "ra");
-    auto value = cs_.MakeInt(GETARG_B(cs_.instr_));
-    auto tag = cs_.MakeInt(LUA_TBOOLEAN);
-    cs_.SetField(ra, value, offsetof(TValue, value_), "value");
-    cs_.SetField(ra, tag, offsetof(TValue, tt_), "tag");
+    Register ra(cs_, GETARG_A(cs_.instr_), "ra");
+    ra.SetBoolean(cs_.MakeInt(GETARG_B(cs_.instr_)));
     if (GETARG_C(cs_.instr_))
         cs_.builder_.CreateBr(cs_.blocks_[cs_.curr_ + 2]);
 }
@@ -185,103 +186,58 @@ void Compiler::CompileLoadnil() {
     int start = GETARG_A(cs_.instr_);
     int end = start + GETARG_B(cs_.instr_);
     for (int i = start; i <= end; ++i) {
-        auto r = cs_.GetValueR(i, "r");
-        cs_.SetField(r, cs_.MakeInt(LUA_TNIL), offsetof(TValue, tt_), "tag");
+        Register r(cs_, i, "r" + std::to_string(i));
+        r.SetTag(LUA_TNIL);
     }
 }
 
 void Compiler::CompileGetupval() {
-    auto ra = cs_.GetValueR(GETARG_A(cs_.instr_), "ra");
-    auto upval = cs_.GetUpval(GETARG_B(cs_.instr_));
-    cs_.SetRegister(ra, upval);
+    Register ra(cs_, GETARG_A(cs_.instr_), "ra");
+    Upvalue upval(cs_, GETARG_B(cs_.instr_));
+    ra.Assign(upval);
 }
 
 void Compiler::CompileGettabup() {
-    Value table(cs_, cs_.GetUpval(GETARG_B(cs_.instr_)));
-    Value key(cs_, GETARG_C(cs_.instr_), "rkc");
-    Value dest(cs_, GETARG_A(cs_.instr_), "ra");
-    #ifdef LLL_EXPAND_TABLE_OP
-        TableGet::Compile(cs_, table, key, dest);
-    #else
-        auto args = {
-            cs_.values_.state,
-            table.GetTValue(),
-            key.GetTValue(),
-            dest.GetTValue()
-        };
-        cs_.CreateCall("LLLGetTable", args);
-    #endif
+    auto table = new Upvalue(cs_, GETARG_B(cs_.instr_));
+    auto key = Value::CreateByArg(cs_, GETARG_C(cs_.instr_), "rkc");
+    auto dest = new Register(cs_, GETARG_A(cs_.instr_), "ra");
+    TableGet(cs_, table, key, dest).Compile();
 }
 
 void Compiler::CompileGettable() {
-    Value table(cs_, GETARG_B(cs_.instr_), "rb");
-    Value key(cs_, GETARG_C(cs_.instr_), "rkc");
-    Value dest(cs_, GETARG_A(cs_.instr_), "ra");
-    #ifdef LLL_EXPAND_TABLE_OP
-        TableGet::Compile(cs_, table, key, dest);
-    #else
-        auto args = {
-            cs_.values_.state,
-            table.GetTValue(),
-            key.GetTValue(),
-            dest.GetTValue()
-        };
-        cs_.CreateCall("LLLGetTable", args);
-    #endif
+    auto table = new Register(cs_, GETARG_B(cs_.instr_), "rb");
+    auto key = Value::CreateByArg(cs_, GETARG_C(cs_.instr_), "rkc");
+    auto dest = new Register(cs_, GETARG_A(cs_.instr_), "ra");
+    TableGet(cs_, table, key, dest).Compile();
 }
 
 void Compiler::CompileSettabup() {
-    Value table(cs_, cs_.GetUpval(GETARG_A(cs_.instr_)));
-    Value key(cs_, GETARG_B(cs_.instr_), "rkb");
-    Value value(cs_, GETARG_C(cs_.instr_), "rkc");
-    #ifdef LLL_EXPAND_TABLE_OP
-        TableSet::Compile(cs_, table, key, value);
-    #else
-        auto args = {
-            cs_.values_.state,
-            table.GetTValue(),
-            key.GetTValue(),
-            value.GetTValue()
-        };
-        cs_.CreateCall("LLLSetTable", args);
-    #endif
+    auto table = new Upval(cs_, GETARG_A(cs_.instr_));
+    auto key = Value::CreateByArg(cs_, GETARG_B(cs_.instr_), "rkb");
+    auto value = Value::CreateByArg(cs_, GETARG_C(cs_.instr_), "rkc");
+    TableSet(cs_, table, key, value).Compile();
 }
 
 void Compiler::CompileSetupval() {
-    auto upvals = cs_.GetFieldPtr(cs_.values_.closure, cs_.rt_.GetType("UpVal"),
-            offsetof(LClosure, upvals), "upvals");
-    auto upvalptr = cs_.builder_.CreateGEP(upvals,
-            cs_.MakeInt(GETARG_B(cs_.instr_)), "upvalptr");
-    auto upval = cs_.builder_.CreateLoad(upvalptr);
-    auto v = cs_.LoadField(upval, cs_.rt_.GetType("TValue"), offsetof(UpVal, v),
-            "v");
-    auto ra = cs_.GetValueR(GETARG_A(cs_.instr_), "ra");
-    cs_.SetRegister(v, ra);
-    cs_.CreateCall("lll_upvalbarrier", {cs_.values_.state, upval});
+    Upvalue upval(cs_, GETARG_B(cs_.instr_));
+    Register ra(cs_, GETARG_A(cs_.instr_), "ra");
+    upval.Assign(ra);
+    cs_.CreateCall("lll_upvalbarrier", {cs_.values_.state, upval.GetTValue()});
 }
 
 void Compiler::CompileSettable() {
-    Value table(cs_, GETARG_A(cs_.instr_), "ra");
-    Value key(cs_, GETARG_B(cs_.instr_), "rkb");
-    Value value(cs_, GETARG_C(cs_.instr_), "rkc");
-    #ifdef LLL_EXPAND_TABLE_OP
-        TableSet::Compile(cs_, table, key, value);
-    #else
-        auto args = {
-            cs_.values_.state,
-            table.GetTValue(),
-            key.GetTValue(),
-            value.GetTValue()
-        };
-        cs_.CreateCall("LLLSetTable", args);
-    #endif
+    auto table = new Register(cs_, GETARG_A(cs_.instr_), "ra");
+    auto key = Value::CreateByArg(cs_, GETARG_B(cs_.instr_), "rkb");
+    auto value = Value::CreateByArg(cs_, GETARG_C(cs_.instr_), "rkc");
+    TableSet(cs_, table, key, value).Compile();
 }
 
 void Compiler::CompileNewtable() {
     int a = GETARG_A(cs_.instr_);
     int b = GETARG_B(cs_.instr_);
     int c = GETARG_C(cs_.instr_);
-    auto args = {cs_.values_.state, cs_.GetValueR(a, "ra")};
+    Register ra(cs_, a, "ra");
+    auto args = {cs_.values_.state, ra.GetTValue()};
     auto table = cs_.CreateCall("lll_newtable", args);
     if (b != 0 || c != 0) {
         args = {
@@ -292,34 +248,24 @@ void Compiler::CompileNewtable() {
         };
         cs_.CreateCall("luaH_resize", args);
     }
-    CompileCheckcg(cs_.GetValueR(a + 1, "ra1"));
+    Register ra1(cs_, a + 1, "ra1");
+    CompileCheckcg(ra1.GetTValue());
 }
 
 void Compiler::CompileSelf() {
-    Value table(cs_, GETARG_B(cs_.instr_), "rb");
-    Value key(cs_, GETARG_C(cs_.instr_), "rkc");
-    Value methodslot(cs_, GETARG_A(cs_.instr_), "ra");
-    Value selfslot(cs_, GETARG_A(cs_.instr_) + 1, "ra1");
+    auto table = new Register(cs_, GETARG_B(cs_.instr_), "rb");
+    auto key = Value::CreateByArg(cs_, GETARG_C(cs_.instr_), "rkc");
+    auto methodslot = new Register(cs_, GETARG_A(cs_.instr_), "ra");
+    Register selfslot(cs_, GETARG_A(cs_.instr_) + 1, "ra1");
     selfslot.SetValue(table);
-    #ifdef LLL_EXPAND_TABLE_OP
-        TableGet::Compile(cs_, table, key, methodslot);
-    #else
-        auto args = {
-            cs_.values_.state,
-            table.GetTValue(),
-            key.GetTValue(),
-            methodslot.GetTValue()
-        };
-        cs_.CreateCall("LLLGetTable", args);
-    #endif
+    TableGet(cs_, table, key, methodslot).Compile();
 }
 
 void Compiler::CompileUnop(const std::string& function) {
-    auto args = {
-        cs_.values_.state,
-        cs_.GetValueR(GETARG_A(cs_.instr_), "ra"),
-        cs_.GetValueRK(GETARG_B(cs_.instr_), "rkb")
-    };
+    Register ra(cs_, GETARG_A(cs_.instr_), "ra");
+    std::unique_ptr<Value> rkb(
+            Value::CreateByArg(cs_, GETARG_B(cs_.instr_), "rkb"));
+    auto args = {cs_.values_.state, ra.GetTValue(), rkb->GetTValue()};
     cs_.CreateCall(function, args);
     cs_.UpdateStack();
 }
@@ -328,19 +274,22 @@ void Compiler::CompileConcat() {
     int a = GETARG_A(cs_.instr_);
     int b = GETARG_B(cs_.instr_);
     int c = GETARG_C(cs_.instr_);
+
     cs_.SetTop(c + 1);
     auto args = {cs_.values_.state, cs_.MakeInt(c - b + 1)};
     cs_.CreateCall("luaV_concat", args);
     cs_.UpdateStack();
 
-    auto ra = cs_.GetValueR(a, "ra");
-    auto rb = cs_.GetValueR(b, "rb");
-    cs_.SetRegister(ra, rb);
+    Register ra(cs_, a, "ra");
+    Register rb(cs_, b, "rb");
+    ra.Assign(rb);
 
-    if (a >= b)
-        CompileCheckcg(cs_.GetValueR(a + 1, "ra1"));
-    else
-        CompileCheckcg(rb);
+    if (a >= b) {
+        Register ra1(cs_, a + 1, "ra1");
+        CompileCheckcg(ra1.GetTValue());
+    } else {
+        CompileCheckcg(rb.GetTValue());
+    }
 
     cs_.ReloadTop();
 }
@@ -350,13 +299,18 @@ void Compiler::CompileJmp() {
 }
 
 void Compiler::CompileCmp(const std::string& function) {
+    std::unique_ptr<Value> rkb(
+            Value::CreateByArg(cs_, GETARG_B(cs_.instr_), "rkb"));
+    std::unique_ptr<Value> rkc(
+            Value::CreateByArg(cs_, GETARG_C(cs_.instr_), "rkc"));
     auto args = {
         cs_.values_.state,
-        cs_.GetValueRK(GETARG_B(cs_.instr_), "rkb"),
-        cs_.GetValueRK(GETARG_C(cs_.instr_), "rkc")
+        rkb.GetTValue(),
+        rkc.GetTValue()
     };
-    cs_.UpdateStack();
     auto result = cs_.CreateCall(function, args, "result");
+    cs_.UpdateStack();
+
     auto a = cs_.MakeInt(GETARG_A(cs_.instr_));
     auto cmp = cs_.builder_.CreateICmpNE(result, a, "cmp");
     auto nextblock = cs_.blocks_[cs_.curr_ + 2];
@@ -365,9 +319,10 @@ void Compiler::CompileCmp(const std::string& function) {
 }
 
 void Compiler::CompileTest() {
+    Register ra(cs_, cs_.GetValueR(GETARG_A(cs_.instr_), "ra"));
     auto args = {
         cs_.MakeInt(GETARG_C(cs_.instr_)),
-        cs_.GetValueR(GETARG_A(cs_.instr_), "ra")
+        
     };
     auto test = cs_.ToBool(cs_.CreateCall("lll_test", args, "test"));
     auto nextblock = cs_.blocks_[cs_.curr_ + 2];

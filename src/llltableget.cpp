@@ -38,15 +38,13 @@ TableGet::TableGet(CompilerState& cs, Value& table, Value& key, Value& dest) :
     finishget_(cs_.CreateSubBlock("finshget", searchtm_)) {
 }
 
-std::vector<TableGet::CompilationStep> TableGet::GetSteps() {
-    return {
-        &TableGet::CheckTable,
-        &TableGet::SwithTag,
-        &TableGet::PerformGet,
-        &TableGet::SearchForTM,
-        &TableGet::SaveResult,
-        &TableGet::FinishGet
-    };
+void TableGet::Compile() {
+    CheckTable();
+    SwithTag();
+    PerformGet();
+    SearchForTM();
+    SaveResult();
+    FinishGet();
 }
 
 void TableGet::CheckTable() {

@@ -309,14 +309,21 @@ void Runtime::InitTypes() {
     ADDTYPE(global_State);
     ADDTYPE(lua_State);
     ADDTYPE(CallInfo);
-    ADDTYPE(TValue);
     ADDTYPE(LClosure);
     ADDTYPE(Proto);
     ADDTYPE(UpVal);
-    ADDTYPE(GCObject );
+    ADDTYPE(GCObject);
     ADDTYPE(Table);
     ADDTYPE(TString);
 
+    auto ttvaluefields = {
+        MakeIntT(sizeof(lua_Integer)),
+        MakeIntT(sizeof(int))
+    };
+    auto ttvalue = llvm::StructType::create(ttvaluefields, "TValue");
+    types_["TValue"] = llvm::PointerType::get(ttvalue, 0);
+
+    types_["int"] = MakeIntT(sizeof(int));
     types_["lua_Integer"] = MakeIntT(sizeof(lua_Integer));
 
     #if LUA_FLOAT_TYPE == LUA_FLOAT_FLOAT

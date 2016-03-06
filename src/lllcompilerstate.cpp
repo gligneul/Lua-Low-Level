@@ -78,7 +78,7 @@ void CompilerState::CreateBlocks() {
     builder_.CreateBr(blocks_[0]);
 }
 
-llvm::Value* CompilerState::MakeInt(int value, llvm::Type* type) {
+llvm::Value* CompilerState::MakeInt(int64_t value, llvm::Type* type) {
     if (!type)
         type = rt_.MakeIntT(sizeof(int));
     return llvm::ConstantInt::get(type, value);
@@ -116,43 +116,14 @@ void CompilerState::SetField(llvm::Value* strukt, llvm::Value* fieldvalue,
     builder_.CreateStore(fieldvalue, ptr);
 }
 
-llvm::Value* CompilerState::GetValueR(int arg, const std::string& name) {
-    auto base = builder_.CreateLoad(values_.base);
-    return builder_.CreateGEP(base, MakeInt(arg), name);
-}
-
-llvm::Value* CompilerState::GetValueK(int arg, const std::string& name) {
-    // Since the value is a constant, llvm ignores the name representation
-    // TODO: remove name parameter
-    // TODO: use global variables
-    (void)name;
-    return InjectPointer(rt_.GetType("TValue"), proto_->k + arg);
-}
-
-llvm::Value* CompilerState::GetValueRK(int arg, const std::string& name) {
-    return ISK(arg) ? GetValueK(INDEXK(arg), name) : GetValueR(arg, name);
-}
-
-llvm::Value* CompilerState::GetUpval(int n) {
-    auto upvals = GetFieldPtr(values_.closure, rt_.GetType("UpVal"),
-            offsetof(LClosure, upvals), "upvals");
-    auto upvalptr = builder_.CreateGEP(upvals, MakeInt(n), "upval");
-    auto upval = builder_.CreateLoad(upvalptr, "upval");
-    return LoadField(upval, rt_.GetType("TValue"), offsetof(UpVal, v), "val");
-}
-
 llvm::Value* CompilerState::CreateCall(const std::string& name,
         std::initializer_list<llvm::Value*> args, const std::string& retname) {
     auto f = rt_.GetFunction(module_.get(), name);
     return builder_.CreateCall(f, args, retname);
 }
 
-void CompilerState::SetRegister(llvm::Value* reg, llvm::Value* value) {
-    auto indices = {MakeInt(0), MakeInt(0)};
-    auto value_memptr = builder_.CreateGEP(value, indices, "value_memptr");
-    auto value_mem = builder_.CreateLoad(value_memptr, "value_mem"); 
-    auto reg_memptr = builder_.CreateGEP(reg, indices, "reg_memptr");
-    builder_.CreateStore(value_mem, reg_memptr);
+llvm::Value* CompilerState::GetBase() {
+    return builder_.CreateLoad(values_.base);
 }
 
 void CompilerState::UpdateStack() {

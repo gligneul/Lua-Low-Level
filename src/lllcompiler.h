@@ -42,10 +42,13 @@ public:
 
 private:
     // Compiles the Lua proto instructions
-    void CompileInstructions();
+    bool CompileInstructions();
 
     // Returns true if the module doesn't have any error
     bool VerifyModule();
+
+    // Optimize the generated module
+    bool OptimizeModule();
 
     // Creates the engine and returns true if it doesn't have any error
     bool CreateEngine();

@@ -11,20 +11,22 @@
 #ifndef LLLARITH_H
 #define LLLARITH_H
 
-#include "lllvalue.h"
+#include <memory>
+
 #include "lllopcode.h"
 
 namespace lll {
 
-class CompilerState;
+class Value;
+class Register;
 
-class Arith : public Opcode<Arith> {
+class Arith : public Opcode {
 public:
     // Constructor
     Arith(CompilerState& cs);
 
-    // Returns the list of steps
-    std::vector<CompilationStep> GetSteps();
+    // Compiles the opcode
+    void Compile();
 
 private:
     // Compilation steps
@@ -45,7 +47,7 @@ private:
     //   goto convop
     // else
     //   goto tmop
-    void SwitchTagCase(Value& value, llvm::Value* tag, llvm::Value* convptr,
+    void SwitchTagCase(Value* value, llvm::Value* tag, llvm::Value* convptr,
             llvm::BasicBlock* entry, llvm::BasicBlock* intop,
             llvm::BasicBlock* floatop, llvm::BasicBlock* convop, bool intfirst);
 
@@ -56,9 +58,9 @@ private:
     // Obtains the corresponding tag for the opcode
     int GetMethodTag();
 
-    Value ra_;
-    Value rb_;
-    Value rc_;
+    std::unique_ptr<Register> ra_;
+    std::unique_ptr<Value> rkb_;
+    std::unique_ptr<Value> rkc_;
     llvm::BasicBlock* intop_;
     llvm::BasicBlock* floatop_;
     llvm::BasicBlock* tmop_;

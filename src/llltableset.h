@@ -18,13 +18,13 @@ namespace lll {
 
 class Value;
 
-class TableSet : public Opcode<TableSet> {
+class TableSet : public Opcode {
 public:
     // Constructor
     TableSet(CompilerState& cs, Value& table, Value& key, Value& value);
 
-    // Returns the list of steps
-    std::vector<CompilationStep> GetSteps();
+    // Compiles the opcode
+    void Compile();
 
 private:
     // Compilation steps

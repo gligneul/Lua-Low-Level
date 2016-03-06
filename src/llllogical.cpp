@@ -8,6 +8,8 @@
 */
 
 #include "llllogical.h"
+#include "lllcompilerstate.h"
+#include "lllvalue.h"
 
 extern "C" {
 #include "lprefix.h"
@@ -20,9 +22,9 @@ namespace lll {
 
 Logical::Logical(CompilerState& cs) :
     Opcode(cs),
-    ra_(cs, GETARG_A(cs_.instr_), "ra"),
-    rb_(cs, GETARG_B(cs_.instr_), "rb", Value::STRING_TO_FLOAT),
-    rc_(cs, GETARG_C(cs_.instr_), "rc", Value::STRING_TO_FLOAT),
+    ra_(new Register(cs, GETARG_A(cs.instr_), "ra")),
+    rkb_(Value::CreateByArg(cs, GETARG_B(cs.instr_)), "rkb"),
+    rkc_(Value::CreateByArg(cs, GETARG_C(cs.instr_)), "rkc"),
     trytm_(cs.CreateSubBlock("trytm")) {
     
     assert(GET_OPCODE(cs.instr_) == OP_BAND ||
@@ -32,11 +34,9 @@ Logical::Logical(CompilerState& cs) :
            GET_OPCODE(cs.instr_) == OP_SHR);
 }
 
-std::vector<Logical::CompilationStep> Logical::GetSteps() {
-    return {
-        &Logical::ComputeInteger,
-        &Logical::ComputeTaggedMethod
-    };
+void Logical::Compile() {
+    ComputeInteger();
+    ComputeTaggedMethod();
 }
 
 void Logical::ComputeInteger() {
@@ -44,13 +44,13 @@ void Logical::ComputeInteger() {
     auto compute = cs_.CreateSubBlock("compute", checkrc);
 
     B_.SetInsertPoint(entry_);
-    B_.CreateCondBr(rb_.IsInteger(), checkrc, trytm_);
+    B_.CreateCondBr(rkb_->IsInteger(), checkrc, trytm_);
 
     B_.SetInsertPoint(checkrc);
-    B_.CreateCondBr(rc_.IsInteger(), compute, trytm_);
+    B_.CreateCondBr(rkc_->IsInteger(), compute, trytm_);
 
     B_.SetInsertPoint(compute);
-    ra_.SetInteger(PerformIntOp(rb_.GetInteger(), rc_.GetInteger()));
+    ra_->SetInteger(PerformIntOp(rkb_->GetInteger(), rkc_->GetInteger()));
     B_.CreateBr(exit_);
 }
 
@@ -58,9 +58,9 @@ void Logical::ComputeTaggedMethod() {
     B_.SetInsertPoint(trytm_);
     auto args = {
         cs_.values_.state,
-        rb_.GetTValue(),
-        rc_.GetTValue(),
-        ra_.GetTValue(),
+        rkb_->GetTValue(),
+        rkc_->GetTValue(),
+        ra_->GetTValue(),
         cs_.MakeInt(GetMethodTag())
     };
     cs_.CreateCall("luaT_trybinTM", args);

@@ -20,13 +20,13 @@ namespace lll {
 
 class Value;
 
-class TableGet : public Opcode<TableGet> {
+class TableGet : public Opcode {
 public:
     // Constructor
     TableGet(CompilerState& cs, Value& table, Value& key, Value& dest);
 
-    // Returns the list of steps
-    std::vector<CompilationStep> GetSteps();
+    // Compiles the opcode
+    void Compile();
 
 private:
     // Compilation steps

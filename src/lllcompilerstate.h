@@ -34,9 +34,9 @@ public:
     CompilerState(lua_State* L, Proto* proto);
 
     // Makes a llvm int value
-    llvm::Value* MakeInt(int value, llvm::Type* type = nullptr);
+    llvm::Value* MakeInt(int64_t value, llvm::Type* type = nullptr);
 
-    // Converts an int to boolean
+    // Converts an int to boolean (value != 0)
     llvm::Value* ToBool(llvm::Value* value);
 
     // Injects a pointer from host to jit
@@ -54,25 +54,13 @@ public:
     void SetField(llvm::Value* strukt, llvm::Value* fieldvalue, size_t offset,
             const std::string& fieldname);
 
-    // Obtains the register $n at stack
-    llvm::Value* GetValueR(int n, const std::string& name);
-
-    // Obtains the constant $n at k-table
-    llvm::Value* GetValueK(int n, const std::string& name);
-
-    // Verifies if $n is a register of constant and returns it
-    llvm::Value* GetValueRK(int n, const std::string& name);
-
-    // Obtains the upvalue $n
-    llvm::Value* GetUpval(int n);
-
     // Create a function call
     llvm::Value* CreateCall(const std::string& name,
             std::initializer_list<llvm::Value*> args,
             const std::string& retname = "");
 
-    // Sets a register with a value
-    void SetRegister(llvm::Value* reg, llvm::Value* value);
+    // Obtains the base of the stack
+    llvm::Value* GetBase();
 
     // Updates base value
     void UpdateStack();
@@ -90,7 +78,7 @@ public:
     llvm::BasicBlock* CreateSubBlock(const std::string& suffix,
             llvm::BasicBlock* preview = nullptr);
 
-    // Prints a message inside the jitted function
+    // Prints a message inside the jitted function (DEBUG)
     template<typename... Arguments>
     void DebugPrint(const std::string& format, Arguments... args) {
         auto function = module_->getFunction("printf");

@@ -9,6 +9,7 @@
 */
 
 #include "lllarith.h"
+#include "lllcompilerstate.h"
 
 extern "C" {
 #include "lprefix.h"
@@ -21,21 +22,19 @@ namespace lll {
 
 Arith::Arith(CompilerState& cs) :
     Opcode(cs),
-    ra_(cs, GETARG_A(cs_.instr_), "ra"),
-    rb_(cs, GETARG_B(cs_.instr_), "rb", Value::STRING_TO_FLOAT),
-    rc_(cs, GETARG_C(cs_.instr_), "rc", Value::STRING_TO_FLOAT),
+    ra_(new Register(cs, GETARG_A(cs.instr_), "ra")),
+    rkb_(Value::CreateByArg(cs, GETARG_B(cs.instr_)), "rkb"),
+    rkc_(Value::CreateByArg(cs, GETARG_C(cs.instr_)), "rkc"),
     intop_(cs.CreateSubBlock("intop")),
     floatop_(cs.CreateSubBlock("floatop", intop_)),
     tmop_(cs.CreateSubBlock("tmop", floatop_)) {
 }
 
-std::vector<Arith::CompilationStep> Arith::GetSteps() {
-    return {
-        &Arith::SwitchTags,
-        &Arith::ComputeInt,
-        &Arith::ComputeFloat,
-        &Arith::ComputeTaggedMethod
-    };
+void Arith::Compile() {
+    SwitchTags();
+    ComputeInt();
+    ComputeFloat();
+    ComputeTaggedMethod();
 }
 
 void Arith::SwitchTags() {
@@ -54,17 +53,18 @@ void Arith::SwitchTags() {
 
     // Operands information
     B_.SetInsertPoint(entry_);
-    auto btag = rb_.GetTag();
-    auto ctag = rc_.GetTag();
+    auto btag = rkb->GetTag();
+    auto ctag = rkc->GetTag();
     auto bnumber = cs_.values_.bnumber;
     auto cnumber = cs_.values_.cnumber;
 
     // Make the switches
-    SwitchTagCase(rb_, btag, bnumber, entry_, bint, bflt, bstr, true);
-    SwitchTagCase(rc_, ctag, cnumber, bint, intop_, bint_cflt, bint_cstr, true);
-    SwitchTagCase(rc_, ctag, cnumber, bflt, bflt_cint, bflt_cflt, bflt_cstr,
+    SwitchTagCase(rkb_, btag, bnumber, entry_, bint, bflt, bstr, true);
+    SwitchTagCase(rkc_, ctag, cnumber, bint, intop_, bint_cflt, bint_cstr,
+            true);
+    SwitchTagCase(rkc_, ctag, cnumber, bflt, bflt_cint, bflt_cflt, bflt_cstr,
             false);
-    SwitchTagCase(rc_, ctag, cnumber, bstr, bstr_cint, bstr_cflt, bstr_cstr,
+    SwitchTagCase(rkc_, ctag, cnumber, bstr, bstr_cint, bstr_cflt, bstr_cstr,
             false);
 
     // Set nb and nc incomings
@@ -82,22 +82,22 @@ void Arith::SwitchTags() {
         B_.CreateBr(floatop_); }
 
     if (!HasIntegerOp()) {
-        SET_INCOMING(intop_, ITOF(rb_.GetInteger()), ITOF(rc_.GetInteger()));
+        SET_INCOMING(intop_, ITOF(rkb->GetInteger()), ITOF(rkc->GetInteger()));
     }
-    SET_INCOMING(bint_cflt, ITOF(rb_.GetInteger()), rc_.GetFloat());
-    SET_INCOMING(bint_cstr, ITOF(rb_.GetInteger()), LOAD(cnumber));
-    SET_INCOMING(bflt_cint, rb_.GetFloat(), ITOF(rc_.GetInteger()));
-    SET_INCOMING(bflt_cflt, rb_.GetFloat(), rc_.GetFloat());
-    SET_INCOMING(bflt_cstr, rb_.GetFloat(), LOAD(cnumber));
-    SET_INCOMING(bstr_cint, LOAD(bnumber), ITOF(rc_.GetInteger()));
-    SET_INCOMING(bstr_cflt, LOAD(bnumber), rc_.GetFloat());
+    SET_INCOMING(bint_cflt, ITOF(rkb->GetInteger()), rkc->GetFloat());
+    SET_INCOMING(bint_cstr, ITOF(rkb->GetInteger()), LOAD(cnumber));
+    SET_INCOMING(bflt_cint, rkb->GetFloat(), ITOF(rkc->GetInteger()));
+    SET_INCOMING(bflt_cflt, rkb->GetFloat(), rkc->GetFloat());
+    SET_INCOMING(bflt_cstr, rkb->GetFloat(), LOAD(cnumber));
+    SET_INCOMING(bstr_cint, LOAD(bnumber), ITOF(rkc->GetInteger()));
+    SET_INCOMING(bstr_cflt, LOAD(bnumber), rkc->GetFloat());
     SET_INCOMING(bstr_cstr, LOAD(bnumber), LOAD(cnumber));
 }
 
 void Arith::ComputeInt() {
     if (HasIntegerOp()) {
         B_.SetInsertPoint(intop_);
-        ra_.SetInteger(PerformIntOp(rb_.GetInteger(), rc_.GetInteger()));
+        ra->SetInteger(PerformIntOp(rkb_.GetInteger(), rkc_.GetInteger()));
         B_.CreateBr(exit_);
     }
 }
@@ -107,7 +107,7 @@ void Arith::ComputeFloat() {
     auto floatt = cs_.rt_.GetType("lua_Number");
     auto nb = CreatePHI(floatt, nbinc_, "nb");
     auto nc = CreatePHI(floatt, ncinc_, "nc");
-    ra_.SetFloat(PerformFloatOp(nb, nc));
+    ra->SetFloat(PerformFloatOp(nb, nc));
     B_.CreateBr(exit_);
 }
 
@@ -115,9 +115,9 @@ void Arith::ComputeTaggedMethod() {
     B_.SetInsertPoint(tmop_);
     auto args = {
         cs_.values_.state,
-        rb_.GetTValue(),
-        rc_.GetTValue(),
-        ra_.GetTValue(),
+        rkb->GetTValue(),
+        rkc->GetTValue(),
+        ra->GetTValue(),
         cs_.MakeInt(GetMethodTag())
     };
     cs_.CreateCall("luaT_trybinTM", args);

@@ -41,15 +41,13 @@ TableSet::TableSet(CompilerState& cs, Value& table, Value& key, Value& value) :
     finishset_(cs_.CreateSubBlock("finishset", fastset_)) {
 }
 
-std::vector<TableSet::CompilationStep> TableSet::GetSteps() {
-    return {
-        &TableSet::CheckTable,
-        &TableSet::SwithTag,
-        &TableSet::PerformGet,
-        &TableSet::CallGCBarrier,
-        &TableSet::FastSet,
-        &TableSet::FinishSet,
-    };
+void TableSet::Compile() {
+    CheckTable();
+    SwithTag();
+    PerformGet();
+    CallGCBarrier();
+    FastSet();
+    FinishSet();
 }
 
 void TableSet::CheckTable() {

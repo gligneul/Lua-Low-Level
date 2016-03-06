@@ -12,20 +12,22 @@
 #ifndef LLLLOGICAL_H
 #define LLLLOGICAL_H
 
+#include <memory>
+
 #include "lllopcode.h"
-#include "lllvalue.h"
 
 namespace lll {
 
-class CompilerState;
+class Value;
+class Register;
 
-class Logical : public Opcode<Logical> {
+class Logical : public Opcode {
 public:
     // Constructor
     Logical(CompilerState& cs);
 
-    // Returns the list of steps
-    std::vector<CompilationStep> GetSteps();
+    // Compiles the opcode
+    void Compile();
 
 private:
     // Compilation steps
@@ -38,9 +40,9 @@ private:
     // Obtains the corresponding tag for the opcode
     int GetMethodTag();
 
-    Value ra_;
-    Value rb_;
-    Value rc_;
+    std::unique_ptr<Register> ra_;
+    std::unique_ptr<Value> rkb_;
+    std::unique_ptr<Value> rkc_;
     llvm::BasicBlock* trytm_;
 };
 
