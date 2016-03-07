@@ -19,11 +19,12 @@
 namespace lll {
 
 class Value;
+class Register;
 
 class TableGet : public Opcode {
 public:
     // Constructor
-    TableGet(CompilerState& cs, Value& table, Value& key, Value& dest);
+    TableGet(CompilerState& cs, Value& table, Value& key, Register& dest);
 
     // Compiles the opcode
     void Compile();
@@ -44,7 +45,7 @@ private:
 
     Value& table_;
     Value& key_;
-    Value& dest_;
+    Register& dest_;
     llvm::Value* tablevalue_;
     IncomingList results_;
     IncomingList tms_;

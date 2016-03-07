@@ -12,19 +12,18 @@
 #ifndef LLLLOGICAL_H
 #define LLLLOGICAL_H
 
-#include <memory>
-
 #include "lllopcode.h"
 
 namespace lll {
 
-class Value;
 class Register;
+class Stack;
+class Value;
 
 class Logical : public Opcode {
 public:
     // Constructor
-    Logical(CompilerState& cs);
+    Logical(CompilerState& cs, Stack& stack);
 
     // Compiles the opcode
     void Compile();
@@ -40,9 +39,9 @@ private:
     // Obtains the corresponding tag for the opcode
     int GetMethodTag();
 
-    std::unique_ptr<Register> ra_;
-    std::unique_ptr<Value> rkb_;
-    std::unique_ptr<Value> rkc_;
+    Register& ra_;
+    Value& rkb_;
+    Value& rkc_;
     llvm::BasicBlock* trytm_;
 };
 

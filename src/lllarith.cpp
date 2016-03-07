@@ -10,6 +10,7 @@
 
 #include "lllarith.h"
 #include "lllcompilerstate.h"
+#include "lllvalue.h"
 
 extern "C" {
 #include "lprefix.h"
@@ -20,11 +21,11 @@ extern "C" {
 
 namespace lll {
 
-Arith::Arith(CompilerState& cs) :
+Arith::Arith(CompilerState& cs, Stack& stack) :
     Opcode(cs),
-    ra_(new Register(cs, GETARG_A(cs.instr_), "ra")),
-    rkb_(Value::CreateByArg(cs, GETARG_B(cs.instr_)), "rkb"),
-    rkc_(Value::CreateByArg(cs, GETARG_C(cs.instr_)), "rkc"),
+    ra_(stack.GetR(GETARG_A(cs.instr_))),
+    rkb_(stack.GetRK(GETARG_B(cs.instr_))),
+    rkc_(stack.GetRK(GETARG_C(cs.instr_))),
     intop_(cs.CreateSubBlock("intop")),
     floatop_(cs.CreateSubBlock("floatop", intop_)),
     tmop_(cs.CreateSubBlock("tmop", floatop_)) {
@@ -52,9 +53,9 @@ void Arith::SwitchTags() {
     auto bstr_cstr = cs_.CreateSubBlock("bstr_cstr", bstr_cflt);
 
     // Operands information
-    B_.SetInsertPoint(entry_);
-    auto btag = rkb->GetTag();
-    auto ctag = rkc->GetTag();
+    cs_.B_.SetInsertPoint(entry_);
+    auto btag = rkb_.GetTag();
+    auto ctag = rkc_.GetTag();
     auto bnumber = cs_.values_.bnumber;
     auto cnumber = cs_.values_.cnumber;
 
@@ -70,59 +71,59 @@ void Arith::SwitchTags() {
     // Set nb and nc incomings
     auto floatt = cs_.rt_.GetType("lua_Number");
     #define ITOF(v) \
-        B_.CreateSIToFP(v, floatt, v->getName() + "_flt")
+        cs_.B_.CreateSIToFP(v, floatt, v->getName() + "_flt")
 
     #define LOAD(v) \
-        B_.CreateLoad(v, v->getName() + "_loaded")
+        cs_.B_.CreateLoad(v, v->getName() + "_loaded")
 
     #define SET_INCOMING(block, bvalue, cvalue) { \
-        B_.SetInsertPoint(block); \
+        cs_.B_.SetInsertPoint(block); \
         nbinc_.push_back({(bvalue), (block)}); \
         ncinc_.push_back({(cvalue), (block)}); \
-        B_.CreateBr(floatop_); }
+        cs_.B_.CreateBr(floatop_); }
 
     if (!HasIntegerOp()) {
-        SET_INCOMING(intop_, ITOF(rkb->GetInteger()), ITOF(rkc->GetInteger()));
+        SET_INCOMING(intop_, ITOF(rkb_.GetInteger()), ITOF(rkc_.GetInteger()));
     }
-    SET_INCOMING(bint_cflt, ITOF(rkb->GetInteger()), rkc->GetFloat());
-    SET_INCOMING(bint_cstr, ITOF(rkb->GetInteger()), LOAD(cnumber));
-    SET_INCOMING(bflt_cint, rkb->GetFloat(), ITOF(rkc->GetInteger()));
-    SET_INCOMING(bflt_cflt, rkb->GetFloat(), rkc->GetFloat());
-    SET_INCOMING(bflt_cstr, rkb->GetFloat(), LOAD(cnumber));
-    SET_INCOMING(bstr_cint, LOAD(bnumber), ITOF(rkc->GetInteger()));
-    SET_INCOMING(bstr_cflt, LOAD(bnumber), rkc->GetFloat());
+    SET_INCOMING(bint_cflt, ITOF(rkb_.GetInteger()), rkc_.GetFloat());
+    SET_INCOMING(bint_cstr, ITOF(rkb_.GetInteger()), LOAD(cnumber));
+    SET_INCOMING(bflt_cint, rkb_.GetFloat(), ITOF(rkc_.GetInteger()));
+    SET_INCOMING(bflt_cflt, rkb_.GetFloat(), rkc_.GetFloat());
+    SET_INCOMING(bflt_cstr, rkb_.GetFloat(), LOAD(cnumber));
+    SET_INCOMING(bstr_cint, LOAD(bnumber), ITOF(rkc_.GetInteger()));
+    SET_INCOMING(bstr_cflt, LOAD(bnumber), rkc_.GetFloat());
     SET_INCOMING(bstr_cstr, LOAD(bnumber), LOAD(cnumber));
 }
 
 void Arith::ComputeInt() {
     if (HasIntegerOp()) {
-        B_.SetInsertPoint(intop_);
-        ra->SetInteger(PerformIntOp(rkb_.GetInteger(), rkc_.GetInteger()));
-        B_.CreateBr(exit_);
+        cs_.B_.SetInsertPoint(intop_);
+        ra_.SetInteger(PerformIntOp(rkb_.GetInteger(), rkc_.GetInteger()));
+        cs_.B_.CreateBr(exit_);
     }
 }
 
 void Arith::ComputeFloat() {
-    B_.SetInsertPoint(floatop_);
+    cs_.B_.SetInsertPoint(floatop_);
     auto floatt = cs_.rt_.GetType("lua_Number");
     auto nb = CreatePHI(floatt, nbinc_, "nb");
     auto nc = CreatePHI(floatt, ncinc_, "nc");
-    ra->SetFloat(PerformFloatOp(nb, nc));
-    B_.CreateBr(exit_);
+    ra_.SetFloat(PerformFloatOp(nb, nc));
+    cs_.B_.CreateBr(exit_);
 }
 
 void Arith::ComputeTaggedMethod() {
-    B_.SetInsertPoint(tmop_);
+    cs_.B_.SetInsertPoint(tmop_);
     auto args = {
         cs_.values_.state,
-        rkb->GetTValue(),
-        rkc->GetTValue(),
-        ra->GetTValue(),
+        rkb_.GetTValue(),
+        rkc_.GetTValue(),
+        ra_.GetTValue(),
         cs_.MakeInt(GetMethodTag())
     };
     cs_.CreateCall("luaT_trybinTM", args);
     cs_.UpdateStack();
-    B_.CreateBr(exit_);
+    cs_.B_.CreateBr(exit_);
 }
 
 bool Arith::HasIntegerOp() {
@@ -146,29 +147,29 @@ void Arith::SwitchTagCase(Value& value, llvm::Value* tag, llvm::Value* convptr,
     auto firstop = intfirst ? intop : floatop;
     auto secondop = intfirst ? floatop : intop;
 
-    B_.SetInsertPoint(entry);
-    auto hasfirsttag = B_.CreateICmpEQ(tag, firsttag);
-    B_.CreateCondBr(hasfirsttag, firstop, checkothertag);
+    cs_.B_.SetInsertPoint(entry);
+    auto hasfirsttag = cs_.B_.CreateICmpEQ(tag, firsttag);
+    cs_.B_.CreateCondBr(hasfirsttag, firstop, checkothertag);
 
-    B_.SetInsertPoint(checkothertag);
-    auto hassecondtag = B_.CreateICmpEQ(tag, secondtag);
-    B_.CreateCondBr(hassecondtag, secondop, convert);
+    cs_.B_.SetInsertPoint(checkothertag);
+    auto hassecondtag = cs_.B_.CreateICmpEQ(tag, secondtag);
+    cs_.B_.CreateCondBr(hassecondtag, secondop, convert);
 
-    B_.SetInsertPoint(convert);
+    cs_.B_.SetInsertPoint(convert);
     auto args = {value.GetTValue(), convptr};
     auto converted = cs_.CreateCall("LLLToNumber", args, "converted");
-    B_.CreateCondBr(converted, convop, tmop_);
+    cs_.B_.CreateCondBr(converted, convop, tmop_);
 }
 
 llvm::Value* Arith::PerformIntOp(llvm::Value* lhs, llvm::Value* rhs) {
     auto name = "result";
     switch (GET_OPCODE(cs_.instr_)) {
         case OP_ADD:
-            return B_.CreateAdd(lhs, rhs, name);
+            return cs_.B_.CreateAdd(lhs, rhs, name);
         case OP_SUB:
-            return B_.CreateSub(lhs, rhs, name);
+            return cs_.B_.CreateSub(lhs, rhs, name);
         case OP_MUL:
-            return B_.CreateMul(lhs, rhs, name);
+            return cs_.B_.CreateMul(lhs, rhs, name);
         case OP_MOD:
             return cs_.CreateCall("luaV_mod", {cs_.values_.state, lhs, rhs},
                     name);
@@ -186,20 +187,20 @@ llvm::Value* Arith::PerformFloatOp(llvm::Value* lhs, llvm::Value* rhs) {
     auto name = "result";
     switch (GET_OPCODE(cs_.instr_)) {
         case OP_ADD:
-            return B_.CreateFAdd(lhs, rhs, name);
+            return cs_.B_.CreateFAdd(lhs, rhs, name);
         case OP_SUB:
-            return B_.CreateFSub(lhs, rhs, name);
+            return cs_.B_.CreateFSub(lhs, rhs, name);
         case OP_MUL:
-            return B_.CreateFMul(lhs, rhs, name);
+            return cs_.B_.CreateFMul(lhs, rhs, name);
         case OP_MOD:
             return cs_.CreateCall("LLLNumMod", {lhs, rhs}, name);
         case OP_POW:
             return cs_.CreateCall(STRINGFY2(l_mathop(pow)), {lhs, rhs}, name);
         case OP_DIV:
-            return B_.CreateFDiv(lhs, rhs, name);
+            return cs_.B_.CreateFDiv(lhs, rhs, name);
         case OP_IDIV:
             return cs_.CreateCall(STRINGFY2(l_mathop(floor)),
-                    {B_.CreateFDiv(lhs, rhs, name)}, "floor");
+                    {cs_.B_.CreateFDiv(lhs, rhs, name)}, "floor");
         default:
             break;
     }

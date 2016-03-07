@@ -11,8 +11,8 @@ CC= clang
 CXX= clang++
 LD= clang++
 
-#OPT= -O0 -g
-OPT= -O3
+OPT= -O0 -g
+#OPT= -O3
 WARNINGS= -Wall -Wextra -Werror -Wno-pedantic
 
 CFLAGS= $(OPT) $(WARNINGS) -DLUA_COMPAT_5_2 $(SYSCFLAGS) $(MYCFLAGS)
@@ -222,38 +222,40 @@ lvm.o: lvm.c lprefix.h lua.h luaconf.h ldebug.h lstate.h lobject.h \
   ltable.h lvm.h
 lzio.o: lzio.c lprefix.h lua.h luaconf.h llimits.h lmem.h lstate.h \
   lobject.h ltm.h lzio.h
-lllarith.o: lllarith.cpp lllarith.h lllvalue.h lllopcode.h \
- lllcompilerstate.h lllruntime.h llimits.h lua.h luaconf.h lprefix.h \
- lobject.h lopcodes.h lvm.h ldo.h lstate.h ltm.h lzio.h lmem.h
-lllcompiler.o: lllcompiler.cpp lllarith.h lllvalue.h lllopcode.h \
- lllcompilerstate.h lllruntime.h llimits.h lua.h luaconf.h lllcompiler.h \
- lllengine.h llllogical.h llltableget.h llltableset.h lllvararg.h \
- lprefix.h lfunc.h lobject.h lgc.h lstate.h ltm.h lzio.h lmem.h \
- lopcodes.h lvm.h ldo.h ltable.h
+lllarith.o: lllarith.cpp lllarith.h lllopcode.h lllcompilerstate.h \
+  lllruntime.h llimits.h lua.h luaconf.h lllvalue.h lprefix.h lobject.h \
+  lopcodes.h lvm.h ldo.h lstate.h ltm.h lzio.h lmem.h
+lllcompiler.o: lllcompiler.cpp lllarith.h lllopcode.h lllcompiler.h \
+  lllcompilerstate.h lllruntime.h llimits.h lua.h luaconf.h lllvalue.h \
+  lllengine.h llllogical.h llltableget.h llltableset.h lllvararg.h \
+  lprefix.h lfunc.h lobject.h lgc.h lstate.h ltm.h lzio.h lmem.h \
+  lopcodes.h ltable.h lvm.h ldo.h
 lllcompilerstate.o: lllcompilerstate.cpp lllcompilerstate.h lllruntime.h \
- llimits.h lua.h luaconf.h lprefix.h lfunc.h lobject.h lopcodes.h \
- lstate.h ltm.h lzio.h lmem.h
+  llimits.h lua.h luaconf.h lprefix.h lfunc.h lobject.h lopcodes.h \
+  lstate.h ltm.h lzio.h lmem.h
 lllcore.o: lllcore.cpp lllcompiler.h lllcompilerstate.h lllruntime.h \
- llimits.h lua.h luaconf.h lllengine.h lprefix.h lapi.h lstate.h \
- lobject.h ltm.h lzio.h lmem.h lauxlib.h lllcore.h
+  llimits.h lua.h luaconf.h lllvalue.h lllengine.h lprefix.h lapi.h \
+  lstate.h lobject.h ltm.h lzio.h lmem.h lauxlib.h lllcore.h
 lllengine.o: lllengine.cpp lllengine.h
-llllogical.o: llllogical.cpp llllogical.h lllopcode.h lllcompilerstate.h \
- lllruntime.h llimits.h lua.h luaconf.h lllvalue.h lprefix.h lobject.h \
- lopcodes.h lvm.h ldo.h lstate.h ltm.h lzio.h lmem.h
+llllogical.o: llllogical.cpp lllcompilerstate.h lllruntime.h llimits.h \
+  lua.h luaconf.h llllogical.h lllopcode.h lllvalue.h lprefix.h \
+  lobject.h lopcodes.h lvm.h ldo.h lstate.h ltm.h lzio.h lmem.h
+lllopcode.o: lllopcode.cpp lllcompilerstate.h lllruntime.h llimits.h \
+  lua.h luaconf.h lllopcode.h
 lllruntime.o: lllruntime.cpp lprefix.h ldebug.h lstate.h lua.h luaconf.h \
- lobject.h llimits.h ltm.h lzio.h lmem.h lfunc.h lgc.h lopcodes.h lvm.h \
- ldo.h ltable.h lllruntime.h
+  lobject.h llimits.h ltm.h lzio.h lmem.h lfunc.h lgc.h lopcodes.h lvm.h \
+  ldo.h ltable.h lllruntime.h
 llltableget.o: llltableget.cpp lllcompilerstate.h lllruntime.h llimits.h \
- lua.h luaconf.h llltableget.h lllopcode.h lllvalue.h lprefix.h lobject.h \
- lstate.h ltm.h lzio.h lmem.h
+  lua.h luaconf.h llltableget.h lllopcode.h lllvalue.h lprefix.h \
+  lobject.h lstate.h ltm.h lzio.h lmem.h
 llltableset.o: llltableset.cpp lllcompilerstate.h lllruntime.h llimits.h \
- lua.h luaconf.h llltableset.h lllopcode.h lllvalue.h lprefix.h lgc.h \
- lobject.h lstate.h ltm.h lzio.h lmem.h
-lllvalue.o: lllvalue.cpp lllcompilerstate.h lllruntime.h llimits.h lua.h \
- luaconf.h lllvalue.h lprefix.h lopcodes.h lvm.h ldo.h lobject.h lstate.h \
- ltm.h lzio.h lmem.h
+  lua.h luaconf.h llltableset.h lllopcode.h lllvalue.h lprefix.h lgc.h \
+  lobject.h lstate.h ltm.h lzio.h lmem.h
+lllvalue.o: lllvalue.cpp lllvalue.h lllcompilerstate.h lllruntime.h \
+  llimits.h lua.h luaconf.h lprefix.h lfunc.h lobject.h lgc.h lstate.h \
+  ltm.h lzio.h lmem.h lopcodes.h
 lllvararg.o: lllvararg.cpp lllvararg.h lllopcode.h lllcompilerstate.h \
- lllruntime.h llimits.h lua.h luaconf.h lprefix.h lfunc.h lobject.h \
- lopcodes.h lstate.h ltm.h lzio.h lmem.h
+  lllruntime.h llimits.h lua.h luaconf.h lllvalue.h lprefix.h lfunc.h \
+  lobject.h lopcodes.h lstate.h ltm.h lzio.h lmem.h
 
 # (end of Makefile)

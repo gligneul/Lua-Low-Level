@@ -46,7 +46,7 @@ lll.isAutoCompileEnable()
   Returns whether the auto compilation is enable.
 
 lll.setCallsToCompile(calls)
-  Sets the number of $calls required to auto compile a function. (default = 2)
+  Sets the number of $calls required to auto compile a function. (default = 50)
 
 lll.getCallsToCompile()
   Obtains the number of calls required to auto-compile a function.

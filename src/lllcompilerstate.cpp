@@ -31,7 +31,7 @@ CompilerState::CompilerState(lua_State* L, Proto* proto) :
     module_(new llvm::Module("lll_module", context_)),
     function_(CreateMainFunction()),
     blocks_(proto_->sizecode, nullptr),
-    builder_(context_),
+    B_(context_),
     curr_(0) {
     module_->setTargetTriple(llvm::sys::getDefaultTargetTriple());
     CreateBlocks();
@@ -55,17 +55,20 @@ void CompilerState::CreateBlocks() {
     values_.closure->setName("closure");
 
     auto entry = llvm::BasicBlock::Create(context_, "entry", function_);
-    builder_.SetInsertPoint(entry);
+    B_.SetInsertPoint(entry);
 
     auto tci = rt_.GetType("CallInfo");
     values_.ci = LoadField(values_.state, tci, offsetof(lua_State, ci), "ci");
 
+    values_.upvals = GetFieldPtr(values_.closure, rt_.GetType("UpVal"),
+            offsetof(LClosure, upvals), "closure.upvals");
+
     auto tluanumber = rt_.GetType("lua_Number");
-    values_.bnumber = builder_.CreateAlloca(tluanumber, nullptr, "bnumber");
-    values_.cnumber = builder_.CreateAlloca(tluanumber, nullptr, "cnumber");
+    values_.bnumber = B_.CreateAlloca(tluanumber, nullptr, "bnumber");
+    values_.cnumber = B_.CreateAlloca(tluanumber, nullptr, "cnumber");
 
     auto ttvalue = rt_.GetType("TValue");
-    values_.base = builder_.CreateAlloca(ttvalue, nullptr, "base");
+    values_.base = B_.CreateAlloca(ttvalue, nullptr, "base");
     UpdateStack();
 
     for (size_t i = 0; i < blocks_.size(); ++i) {
@@ -75,7 +78,7 @@ void CompilerState::CreateBlocks() {
         blocks_[i] = llvm::BasicBlock::Create(context_, name.str(), function_);
     }
 
-    builder_.CreateBr(blocks_[0]);
+    B_.CreateBr(blocks_[0]);
 }
 
 llvm::Value* CompilerState::MakeInt(int64_t value, llvm::Type* type) {
@@ -85,51 +88,51 @@ llvm::Value* CompilerState::MakeInt(int64_t value, llvm::Type* type) {
 }
 
 llvm::Value* CompilerState::ToBool(llvm::Value* value) {
-    return builder_.CreateICmpNE(value, MakeInt(0, value->getType()),
+    return B_.CreateICmpNE(value, MakeInt(0, value->getType()),
             value->getName() + ".bool");
 }
 
 llvm::Value* CompilerState::InjectPointer(llvm::Type* type, void* ptr) {
     auto intptrt = rt_.MakeIntT(sizeof(void*));
     auto intptr = llvm::ConstantInt::get(intptrt, (uintptr_t)ptr);
-    return builder_.CreateIntToPtr(intptr, type);
+    return B_.CreateIntToPtr(intptr, type);
 }
 
 llvm::Value* CompilerState::GetFieldPtr(llvm::Value* strukt,
         llvm::Type* fieldtype, size_t offset, const std::string& name) {
     auto memt = llvm::PointerType::get(rt_.MakeIntT(1), 0);
-    auto mem = builder_.CreateBitCast(strukt, memt, strukt->getName() + "_mem");
-    auto element = builder_.CreateGEP(mem, MakeInt(offset), name + "_mem");
+    auto mem = B_.CreateBitCast(strukt, memt, strukt->getName() + "_mem");
+    auto element = B_.CreateGEP(mem, MakeInt(offset), name + "_mem");
     auto ptrtype = llvm::PointerType::get(fieldtype, 0);
-    return builder_.CreateBitCast(element, ptrtype, name + "_ptr");
+    return B_.CreateBitCast(element, ptrtype, name + "_ptr");
 }
 
 llvm::Value* CompilerState::LoadField(llvm::Value* strukt,
         llvm::Type* fieldtype, size_t offset, const std::string& name) {
     auto ptr = GetFieldPtr(strukt, fieldtype, offset, name);
-    return builder_.CreateLoad(ptr, name);
+    return B_.CreateLoad(ptr, name);
 }
 
 void CompilerState::SetField(llvm::Value* strukt, llvm::Value* fieldvalue,
         size_t offset, const std::string& fieldname) {
     auto ptr = GetFieldPtr(strukt, fieldvalue->getType(), offset,fieldname);
-    builder_.CreateStore(fieldvalue, ptr);
+    B_.CreateStore(fieldvalue, ptr);
 }
 
 llvm::Value* CompilerState::CreateCall(const std::string& name,
         std::initializer_list<llvm::Value*> args, const std::string& retname) {
     auto f = rt_.GetFunction(module_.get(), name);
-    return builder_.CreateCall(f, args, retname);
+    return B_.CreateCall(f, args, retname);
 }
 
 llvm::Value* CompilerState::GetBase() {
-    return builder_.CreateLoad(values_.base);
+    return B_.CreateLoad(values_.base);
 }
 
 void CompilerState::UpdateStack() {
     auto base = LoadField(values_.ci, rt_.GetType("TValue"),
             offsetof(CallInfo, u.l.base), "u.l.base");
-    builder_.CreateStore(base, values_.base);
+    B_.CreateStore(base, values_.base);
 }
 
 void CompilerState::ReloadTop() {
@@ -139,17 +142,17 @@ void CompilerState::ReloadTop() {
 }
 
 void CompilerState::SetTop(int reg) {
-    auto top = GetValueR(reg, "top");
-    SetField(values_.state, top, offsetof(lua_State, top), "top");
+    auto r = B_.CreateGEP(GetBase(), MakeInt(reg), "newtop");
+    SetField(values_.state, r, offsetof(lua_State, top), "top");
 }
 
 llvm::Value* CompilerState::TopDiff(int n) {
     auto top = LoadField(values_.state, rt_.GetType("TValue"),
             offsetof(lua_State, top), "top");
-    auto r = GetValueR(n, "r");
-    auto diff = builder_.CreatePtrDiff(top, r, "diff");
+    auto r = B_.CreateGEP(GetBase(), MakeInt(n), "r" + std::to_string(n) + "_");
+    auto diff = B_.CreatePtrDiff(top, r, "diff");
     auto inttype = rt_.MakeIntT(sizeof(int));
-    return builder_.CreateIntCast(diff, inttype, false, "idiff");
+    return B_.CreateIntCast(diff, inttype, false, "idiff");
 }
 
 llvm::BasicBlock* CompilerState::CreateSubBlock(const std::string& suffix,

@@ -7,8 +7,8 @@
 ** llllogical.cpp
 */
 
-#include "llllogical.h"
 #include "lllcompilerstate.h"
+#include "llllogical.h"
 #include "lllvalue.h"
 
 extern "C" {
@@ -20,11 +20,11 @@ extern "C" {
 
 namespace lll {
 
-Logical::Logical(CompilerState& cs) :
+Logical::Logical(CompilerState& cs, Stack& stack) :
     Opcode(cs),
-    ra_(new Register(cs, GETARG_A(cs.instr_), "ra")),
-    rkb_(Value::CreateByArg(cs, GETARG_B(cs.instr_)), "rkb"),
-    rkc_(Value::CreateByArg(cs, GETARG_C(cs.instr_)), "rkc"),
+    ra_(stack.GetR(GETARG_A(cs.instr_))),
+    rkb_(stack.GetRK(GETARG_B(cs.instr_))),
+    rkc_(stack.GetRK(GETARG_C(cs.instr_))),
     trytm_(cs.CreateSubBlock("trytm")) {
     
     assert(GET_OPCODE(cs.instr_) == OP_BAND ||
@@ -43,44 +43,44 @@ void Logical::ComputeInteger() {
     auto checkrc = cs_.CreateSubBlock("checkc", entry_);
     auto compute = cs_.CreateSubBlock("compute", checkrc);
 
-    B_.SetInsertPoint(entry_);
-    B_.CreateCondBr(rkb_->IsInteger(), checkrc, trytm_);
+    cs_.B_.SetInsertPoint(entry_);
+    cs_.B_.CreateCondBr(rkb_.HasTag(LUA_TNUMINT), checkrc, trytm_);
 
-    B_.SetInsertPoint(checkrc);
-    B_.CreateCondBr(rkc_->IsInteger(), compute, trytm_);
+    cs_.B_.SetInsertPoint(checkrc);
+    cs_.B_.CreateCondBr(rkc_.HasTag(LUA_TNUMINT), compute, trytm_);
 
-    B_.SetInsertPoint(compute);
-    ra_->SetInteger(PerformIntOp(rkb_->GetInteger(), rkc_->GetInteger()));
-    B_.CreateBr(exit_);
+    cs_.B_.SetInsertPoint(compute);
+    ra_.SetInteger(PerformIntOp(rkb_.GetInteger(), rkc_.GetInteger()));
+    cs_.B_.CreateBr(exit_);
 }
 
 void Logical::ComputeTaggedMethod() {
-    B_.SetInsertPoint(trytm_);
+    cs_.B_.SetInsertPoint(trytm_);
     auto args = {
         cs_.values_.state,
-        rkb_->GetTValue(),
-        rkc_->GetTValue(),
-        ra_->GetTValue(),
+        rkb_.GetTValue(),
+        rkc_.GetTValue(),
+        ra_.GetTValue(),
         cs_.MakeInt(GetMethodTag())
     };
     cs_.CreateCall("luaT_trybinTM", args);
     cs_.UpdateStack();
-    B_.CreateBr(exit_);
+    cs_.B_.CreateBr(exit_);
 }
 
 llvm::Value* Logical::PerformIntOp(llvm::Value* a, llvm::Value* b) {
     auto name = "result";
     switch (GET_OPCODE(cs_.instr_)) {
         case OP_BAND:
-            return B_.CreateAnd(a, b, name);
+            return cs_.B_.CreateAnd(a, b, name);
         case OP_BOR:
-            return B_.CreateOr(a, b, name);
+            return cs_.B_.CreateOr(a, b, name);
         case OP_BXOR:
-            return B_.CreateXor(a, b, name);
+            return cs_.B_.CreateXor(a, b, name);
         case OP_SHL:
             return cs_.CreateCall("luaV_shiftl", {a, b}, name);
         case OP_SHR:
-            return cs_.CreateCall("luaV_shiftl", {a, B_.CreateNeg(b)}, name);
+            return cs_.CreateCall("luaV_shiftl", {a, cs_.B_.CreateNeg(b)}, name);
         default:
             break;
     }

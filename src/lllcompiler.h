@@ -10,11 +10,11 @@
 #ifndef LLLCOMPILER_H
 #define LLLCOMPILER_H
 
+#include <memory>
 #include <string>
 
-#include <llvm/ExecutionEngine/ExecutionEngine.h>
-
 #include "lllcompilerstate.h"
+#include "lllvalue.h"
 
 namespace lll {
 
@@ -22,11 +22,6 @@ class Engine;
 
 class Compiler {
 public:
-    static const llvm::CodeGenOpt::Level OPT_LEVEL =
-            //llvm::CodeGenOpt::None;
-            //llvm::CodeGenOpt::Default;
-            llvm::CodeGenOpt::Aggressive;
-
     // Constructor, receiver the proto that will be compiled
     Compiler(lua_State* L, Proto* proto);
 
@@ -85,6 +80,7 @@ private:
 
     std::string error_;
     CompilerState cs_;
+    Stack stack_;
     std::unique_ptr<Engine> engine_;
 };
 

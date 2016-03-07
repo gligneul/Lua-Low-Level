@@ -49,7 +49,7 @@ void LLLSetAutoCompileEnable (int enable);
 /* Returns whether the auto compilation is enable */
 int LLLIsAutoCompileEnable();
 
-/* Sets the number of calls required to auto-compile a function (default = 2) */
+/* Sets the number of calls required to auto-compile a function */
 void LLLSetCallsToCompile (int calls);
 
 /* Obtains the number of calls required to auto-compile a function */

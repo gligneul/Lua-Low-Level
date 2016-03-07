@@ -12,42 +12,29 @@
 
 extern "C" {
 #include "lprefix.h"
+#include "lfunc.h"
+#include "lgc.h"
 #include "lobject.h"
+#include "lopcodes.h"
 }
 
-std::unique_ptr<Value> Value::CreateRK(CompilerState& cs, int arg,
-        const std::string& name) {
-    if (ISK(arg))
-        return CreateK(cs, INDEXK(arg));
-    else
-        return CreateR(cs, arg, name);
+namespace lll {
+
+Value::Value(CompilerState& cs) :
+    cs_(cs) {
 }
 
-std::unique_ptr<Constant> Value::CreateK(CompilerState& cs, int arg) {
-    return new Constant(cs, arg);
-}
-
-std::unique_ptr<Register> Value::CreateR(CompilerState& cs, int arg,
-        const std::string& name = "") {
-    return new Register(cs, arg, name);
-}
-
-std::unique_ptr<Upvalue> Value::CreateUpval(CompilerState& cs, int arg) {
-    return new Upvalue(cs, arg);
+llvm::Value* Value::HasTag(int tag) {
+    return cs_.B_.CreateICmpEQ(GetTag(), cs_.MakeInt(tag));
 }
 
 Constant::Constant(CompilerState& cs, int arg) :
-    cs_(cs),
+    Value(cs),
     tvalue_(cs.proto_->k + arg) {
 }
 
 llvm::Value* Constant::GetTag() {
     return cs_.MakeInt(rttype(tvalue_));
-}
-
-llvm::Value* Constant::HasTag(int tag) {
-    auto tbool = llvm::Type::getInt1Ty(cs_.context_);
-    return cs_.MakeInt(rttype(tvalue_) == tag, tbool);
 }
 
 llvm::Value* Constant::GetTValue() {
@@ -74,22 +61,51 @@ llvm::Value* Constant::GetTString() {
     return cs_.InjectPointer(ttstring, tsvalue(tvalue_));
 }
 
+llvm::Value* Constant::GetTable() {
+    auto ttable = cs_.rt_.GetType("Table");
+    return cs_.InjectPointer(ttable, hvalue(tvalue_));
+}
+
 llvm::Value* Constant::GetGCValue() {
     auto tgcobject = cs_.rt_.GetType("GCObject");
     return cs_.InjectPointer(tgcobject, gcvalue(tvalue_));
 }
 
 MutableValue::MutableValue(CompilerState& cs, llvm::Value* tvalue) :
-    cs_(cs),
+    Value(cs),
     tvalue_(tvalue) {
 }
 
 llvm::Value* MutableValue::GetTag() {
-    return cs_.builder_.CreateLoad(GetField(TAG), tvalue_->getName() + ".tag");
+    return cs_.B_.CreateLoad(GetField(TAG), tvalue_->getName() + ".tag");
 }
 
-llvm::Value* MutableValue::HasTag(int tag) {
-    return cs_.builder_.CreateICmpEQ(GetTag(), cs_.MakeInt(tag));
+llvm::Value* MutableValue::GetTValue() {
+    return tvalue_;
+}
+
+llvm::Value* MutableValue::GetBoolean() {
+    return GetValue(cs_.rt_.MakeIntT(sizeof(int)), "bvalue");
+}
+
+llvm::Value* MutableValue::GetInteger() {
+    return cs_.B_.CreateLoad(GetField(VALUE), tvalue_->getName() + ".ivalue");
+}
+
+llvm::Value* MutableValue::GetFloat() {
+    return GetValue(cs_.rt_.GetType("lua_Number"), "nvalue");
+}
+
+llvm::Value* MutableValue::GetTString() {
+    return GetValue(cs_.rt_.GetType("TString"), "strvalue");
+}
+
+llvm::Value* MutableValue::GetTable() {
+    return GetValue(cs_.rt_.GetType("Table"), "hvalue");
+}
+
+llvm::Value* MutableValue::GetGCValue() {
+    return GetValue(cs_.rt_.GetType("GCObject"), "gcvalue");
 }
 
 void MutableValue::SetTag(int tag) {
@@ -97,91 +113,120 @@ void MutableValue::SetTag(int tag) {
 }
 
 void MutableValue::SetTag(llvm::Value* tag) {
-    cs_.builder_.CreateStore(tag, GetFieldPtr(TAG));
+    cs_.B_.CreateStore(tag, GetField(TAG));
 }
 
-llvm::Value* MutableValue::GetTValue() {
-    return tvalue_;
+void MutableValue::SetValue(llvm::Value* value) {
+    cs_.B_.CreateStore(value, GetField(VALUE));
 }
 
 void MutableValue::Assign(Value& value) {
-    this->SetTag(value.GetTag());
-    cs_.builder_.CreateStore(value.GetInteger(), this->GetField(VALUE));
-}
-
-llvm::Value* MutableValue::GetBoolean() {
-
+    SetTag(value.GetTag());
+    SetValue(value.GetInteger());
 }
 
 void MutableValue::SetBoolean(llvm::Value* bvalue) {
     SetTag(LUA_TBOOLEAN);
-    cs_.builder_.CreateStore(bvalue, GetValuePtr("int", "bvalue"));
+    auto type = cs_.rt_.MakeIntT(sizeof(int));
+    cs_.B_.CreateStore(bvalue, GetValuePtr(type, "bvalue"));
 }
 
-llvm::Value* MutableValue::GetInteger() {
-    auto name = tvalue_->getName() + ".ivalue";
-    return cs_.builder_.CreateLoad(GetField(Value), name);
-}
 
 void MutableValue::SetInteger(llvm::Value* ivalue) {
     SetTag(LUA_TNUMINT);
-    cs_.builder_.CreateStore(ivalue, this->GetField(VALUE));
-}
-
-llvm::Value* MutableValue::GetFloat() {
-    return GetValue("lua_Number", "nvalue");
+    cs_.B_.CreateStore(ivalue, GetField(VALUE));
 }
 
 void MutableValue::SetFloat(llvm::Value* fvalue) {
     SetTag(LUA_TNUMFLT);
-    cs_.builder_.CreateStore(fvalue, GetValuePtr("lua_Number", "nvalue"));
+    auto type = cs_.rt_.GetType("lua_Number");
+    cs_.B_.CreateStore(fvalue, GetValuePtr(type, "nvalue"));
 }
 
-llvm::Value* MutableValue::GetTString() {
-    return GetValue("TString", "str");
-}
-
-llvm::Value* MutableValue::GetTable() {
-    return GetValue("Table", "table");
-}
-
-llvm::Value* MutableValue::GetGCValue() {
-    return GetValue("GCObject", "gc");
-}
-
-llvm::Value* MutableValue::GetField(Fields field) {
-    auto indices = {MakeInt(0), MakeInt((int)field)};
-    auto name = tvalue_->GetName() + (field == VALUE ? ".value.ptr"
+llvm::Value* MutableValue::GetField(Field field) {
+    auto indices = {cs_.MakeInt(0), cs_.MakeInt((int)field)};
+    auto name = tvalue_->getName() + (field == VALUE ? ".value.ptr"
                                                      : ".tag.ptr");
-    return cs_.builder_.CreateGEP(tvalue_, indices, name);
+    return cs_.B_.CreateGEP(tvalue_, indices, name);
 }
 
-llvm::Value* MutableValue::GetValue(const std::string& typestr,
-        const std::string& name) {
+llvm::Value* MutableValue::GetValue(llvm::Type* type, const std::string& name) {
     auto fullname = tvalue_->getName() + "." + name;
-    return cs_.builder_.CreateLoad(GetValuePtr(typestr, fullname), fullname);
-
-llvm::Value* MutableValue::GetValuePtr(const std::string& typestr,
-        const std::string& name) {
-    auto type = cs_.rt_.LoadType(typestr);
-    return cs_.builder_.CreateBitCast(GetField(VALUE), type, name + ".ptr");
+    return cs_.B_.CreateLoad(GetValuePtr(type, name), fullname);
 }
 
-Register::Register(CompilerState& cs, int arg, const std::string& name) :
-    MutableValue(cs, cs.builder_.CreateGEP(cs.GetBase(), cs.MakeInt(arg),
-                                           name)) {
+llvm::Value* MutableValue::GetValuePtr(llvm::Type* type,
+        const std::string& name) {
+    auto fullname = tvalue_->getName() + "." + name + ".ptr";
+    auto ptrtype = llvm::PointerType::get(type, 0);
+    return cs_.B_.CreateBitCast(GetField(VALUE), ptrtype, fullname);
+}
+
+Register::Register(CompilerState& cs, int arg) :
+    MutableValue(cs),
+    arg_(arg) {
+}
+
+void Register::Reload() {
+    auto name = "r" + std::to_string(arg_) + "_";
+    tvalue_ = cs_.B_.CreateGEP(cs_.GetBase(), cs_.MakeInt(arg_), name);
 }
 
 Upvalue::Upvalue(CompilerState& cs, int arg) :
-    MutableValue(cs, ComputeTValue(cs, arg)) {
+    MutableValue(cs),
+    arg_(arg),
+    upval_(nullptr) {
 }
 
-llvm::Value* Upvalue::ComputeTValue(CompilerState& cs, int arg) {
-    auto upvals = GetFieldPtr(values_.closure, rt_.GetType("UpVal"),
-            offsetof(LClosure, upvals), "closure.upvals");
-    auto upvalptr = builder_.CreateGEP(upvals, MakeInt(n), "upval.ptr");
-    auto upval = builder_.CreateLoad(upvalptr, "upval");
-    return LoadField(upval, rt_.GetType("TValue"), offsetof(UpVal, v),
-             "upval.v");
+void Upvalue::Reload() {
+    auto upvalptr = cs_.B_.CreateGEP(cs_.values_.upvals, cs_.MakeInt(arg_),
+            "upval.ptr");
+    upval_ = cs_.B_.CreateLoad(upvalptr, "upval");
+    tvalue_ = cs_.LoadField(upval_, cs_.rt_.GetType("TValue"),
+            offsetof(UpVal, v), "upval.v");
+}
+
+llvm::Value* Upvalue::GetUpVal() {
+    return upval_;
+}
+
+Stack::Stack(CompilerState& cs) {
+    for (int i = 0; i < cs.proto_->sizek; ++i)
+        k_.emplace_back(cs, i);
+    for (int i = 0; i < cs.proto_->maxstacksize + 1; ++i)
+        r_.emplace_back(cs, i);
+    for (int i = 0; i < cs.proto_->sizeupvalues; ++i)
+        u_.emplace_back(cs, i);
+}
+
+Value& Stack::GetRK(int arg) {
+    if (ISK(arg))
+        return GetK(INDEXK(arg));
+    else
+        return GetR(arg);
+}
+
+Constant& Stack::GetK(int arg) {
+    assert(arg >= 0);
+    assert(arg < (int)k_.size());
+    return k_[arg];
+}
+
+Register& Stack::GetR(int arg) {
+    assert(arg >= 0);
+    assert(arg < (int)r_.size());
+    auto& r = r_[arg];
+    r.Reload();
+    return r;
+}
+
+Upvalue& Stack::GetUp(int arg) {
+    assert(arg >= 0);
+    assert(arg < (int)u_.size());
+    auto& u = u_[arg];
+    u.Reload();
+    return u;
+}
+
 }
 

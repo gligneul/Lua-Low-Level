@@ -8,6 +8,7 @@
 */
 
 #include <llvm/ADT/StringRef.h>
+#include <llvm/ExecutionEngine/ExecutionEngine.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/PassManager.h>
 #include <llvm/Support/raw_ostream.h>
@@ -15,7 +16,6 @@
 #include <llvm/Transforms/Scalar.h>
 
 #define LLL_USE_MCJIT
-
 #ifdef LLL_USE_MCJIT
 #include <llvm/ExecutionEngine/MCJIT.h>
 #else
@@ -29,7 +29,6 @@
 #include "lllruntime.h"
 #include "llltableget.h"
 #include "llltableset.h"
-#include "lllvalue.h"
 #include "lllvararg.h"
 
 extern "C" {
@@ -37,15 +36,21 @@ extern "C" {
 #include "lfunc.h"
 #include "lgc.h"
 #include "lopcodes.h"
+#include "ltable.h"
 #include "luaconf.h"
 #include "lvm.h"
-#include "ltable.h"
 }
+
+static const llvm::CodeGenOpt::Level OPT_LEVEL =
+        //llvm::CodeGenOpt::None;
+        //llvm::CodeGenOpt::Default;
+        llvm::CodeGenOpt::Aggressive;
 
 namespace lll {
 
 Compiler::Compiler(lua_State* L, Proto* proto) :
     cs_(L, proto),
+    stack_(cs_),
     engine_(nullptr) {
     static bool init = true;
     if (init) {
@@ -73,7 +78,7 @@ Engine* Compiler::GetEngine() {
 
 bool Compiler::CompileInstructions() {
     for (cs_.curr_ = 0; cs_.curr_ < cs_.proto_->sizecode; ++cs_.curr_) {
-        cs_.builder_.SetInsertPoint(cs_.blocks_[cs_.curr_]);
+        cs_.B_.SetInsertPoint(cs_.blocks_[cs_.curr_]);
         cs_.instr_ = cs_.proto_->code[cs_.curr_];
         //cs_.DebugPrint(luaP_opnames[GET_OPCODE(cs_.instr_)]);
         switch (GET_OPCODE(cs_.instr_)) {
@@ -92,9 +97,9 @@ bool Compiler::CompileInstructions() {
             case OP_SELF:     CompileSelf(); break;
             case OP_ADD: case OP_SUB: case OP_MUL: case OP_MOD: case OP_POW:  
             case OP_DIV: case OP_IDIV:
-                              Arith(cs_).Compile(); break;
+                              Arith(cs_, stack_).Compile(); break;
             case OP_BAND: case OP_BOR: case OP_BXOR: case OP_SHL: case OP_SHR:
-                              Logical(cs_).Compile(); break;
+                              Logical(cs_, stack_).Compile(); break;
             case OP_UNM:      CompileUnop("lll_unm"); break;
             case OP_BNOT:     CompileUnop("lll_bnot"); break;
             case OP_NOT:      CompileUnop("lll_not"); break;
@@ -119,7 +124,7 @@ bool Compiler::CompileInstructions() {
             case OP_EXTRAARG: /* ignored */ break;
         }
         if (!cs_.blocks_[cs_.curr_]->getTerminator())
-            cs_.builder_.CreateBr(cs_.blocks_[cs_.curr_ + 1]);
+            cs_.B_.CreateBr(cs_.blocks_[cs_.curr_ + 1]);
     }
     return true;
 }
@@ -127,8 +132,11 @@ bool Compiler::CompileInstructions() {
 bool Compiler::VerifyModule() {
     llvm::raw_string_ostream error_os(error_);
     bool err = llvm::verifyModule(*cs_.module_, &error_os);
-    if (err)
+    if (err) {
         cs_.module_->dump();
+        printf("TRETA %s\n", error_.c_str());
+        exit(1);
+    }
     return !err;
 }
 
@@ -162,73 +170,73 @@ bool Compiler::CreateEngine() {
 }
 
 void Compiler::CompileMove() {
-    Register ra(cs_, GETARG_A(cs_.instr_), "ra");
-    Register rb(cs_, GETARG_B(cs_.instr_), "rb");
+    auto& ra = stack_.GetR(GETARG_A(cs_.instr_));
+    auto& rb = stack_.GetR(GETARG_B(cs_.instr_));
     ra.Assign(rb);
 }
 
 void Compiler::CompileLoadk(bool extraarg) {
-    Register ra(cs_, GETARG_A(cs_.instr_), "ra");
+    auto& ra = stack_.GetR(GETARG_A(cs_.instr_));
     int karg = extraarg ? GETARG_Ax(cs_.proto_->code[cs_.curr_ + 1])
                         : GETARG_Bx(cs_.instr_);
-    Constant k(cs_, karg)
+    auto& k = stack_.GetK(karg);
     ra.Assign(k);
 }
 
 void Compiler::CompileLoadbool() {
-    Register ra(cs_, GETARG_A(cs_.instr_), "ra");
+    auto& ra = stack_.GetR(GETARG_A(cs_.instr_));
     ra.SetBoolean(cs_.MakeInt(GETARG_B(cs_.instr_)));
     if (GETARG_C(cs_.instr_))
-        cs_.builder_.CreateBr(cs_.blocks_[cs_.curr_ + 2]);
+        cs_.B_.CreateBr(cs_.blocks_[cs_.curr_ + 2]);
 }
 
 void Compiler::CompileLoadnil() {
     int start = GETARG_A(cs_.instr_);
     int end = start + GETARG_B(cs_.instr_);
     for (int i = start; i <= end; ++i) {
-        Register r(cs_, i, "r" + std::to_string(i));
+        auto& r = stack_.GetR(i);
         r.SetTag(LUA_TNIL);
     }
 }
 
 void Compiler::CompileGetupval() {
-    Register ra(cs_, GETARG_A(cs_.instr_), "ra");
-    Upvalue upval(cs_, GETARG_B(cs_.instr_));
+    auto& ra = stack_.GetR(GETARG_A(cs_.instr_));
+    auto& upval = stack_.GetUp(GETARG_B(cs_.instr_));
     ra.Assign(upval);
 }
 
 void Compiler::CompileGettabup() {
-    auto table = new Upvalue(cs_, GETARG_B(cs_.instr_));
-    auto key = Value::CreateByArg(cs_, GETARG_C(cs_.instr_), "rkc");
-    auto dest = new Register(cs_, GETARG_A(cs_.instr_), "ra");
+    auto& table = stack_.GetUp(GETARG_B(cs_.instr_));
+    auto& key = stack_.GetRK(GETARG_C(cs_.instr_));
+    auto& dest = stack_.GetR(GETARG_A(cs_.instr_));
     TableGet(cs_, table, key, dest).Compile();
 }
 
 void Compiler::CompileGettable() {
-    auto table = new Register(cs_, GETARG_B(cs_.instr_), "rb");
-    auto key = Value::CreateByArg(cs_, GETARG_C(cs_.instr_), "rkc");
-    auto dest = new Register(cs_, GETARG_A(cs_.instr_), "ra");
+    auto& table = stack_.GetR(GETARG_B(cs_.instr_));
+    auto& key = stack_.GetRK(GETARG_C(cs_.instr_));
+    auto& dest = stack_.GetR(GETARG_A(cs_.instr_));
     TableGet(cs_, table, key, dest).Compile();
 }
 
 void Compiler::CompileSettabup() {
-    auto table = new Upval(cs_, GETARG_A(cs_.instr_));
-    auto key = Value::CreateByArg(cs_, GETARG_B(cs_.instr_), "rkb");
-    auto value = Value::CreateByArg(cs_, GETARG_C(cs_.instr_), "rkc");
+    auto& table = stack_.GetUp(GETARG_A(cs_.instr_));
+    auto& key = stack_.GetRK(GETARG_B(cs_.instr_));
+    auto& value = stack_.GetRK(GETARG_C(cs_.instr_));
     TableSet(cs_, table, key, value).Compile();
 }
 
 void Compiler::CompileSetupval() {
-    Upvalue upval(cs_, GETARG_B(cs_.instr_));
-    Register ra(cs_, GETARG_A(cs_.instr_), "ra");
+    auto& upval = stack_.GetUp(GETARG_B(cs_.instr_));
+    auto& ra = stack_.GetR(GETARG_A(cs_.instr_));
     upval.Assign(ra);
-    cs_.CreateCall("lll_upvalbarrier", {cs_.values_.state, upval.GetTValue()});
+    cs_.CreateCall("lll_upvalbarrier", {cs_.values_.state, upval.GetUpVal()});
 }
 
 void Compiler::CompileSettable() {
-    auto table = new Register(cs_, GETARG_A(cs_.instr_), "ra");
-    auto key = Value::CreateByArg(cs_, GETARG_B(cs_.instr_), "rkb");
-    auto value = Value::CreateByArg(cs_, GETARG_C(cs_.instr_), "rkc");
+    auto& table = stack_.GetR(GETARG_A(cs_.instr_));
+    auto& key = stack_.GetRK(GETARG_B(cs_.instr_));
+    auto& value = stack_.GetRK(GETARG_C(cs_.instr_));
     TableSet(cs_, table, key, value).Compile();
 }
 
@@ -236,7 +244,7 @@ void Compiler::CompileNewtable() {
     int a = GETARG_A(cs_.instr_);
     int b = GETARG_B(cs_.instr_);
     int c = GETARG_C(cs_.instr_);
-    Register ra(cs_, a, "ra");
+    auto& ra = stack_.GetR(a);
     auto args = {cs_.values_.state, ra.GetTValue()};
     auto table = cs_.CreateCall("lll_newtable", args);
     if (b != 0 || c != 0) {
@@ -248,24 +256,23 @@ void Compiler::CompileNewtable() {
         };
         cs_.CreateCall("luaH_resize", args);
     }
-    Register ra1(cs_, a + 1, "ra1");
+    auto& ra1 = stack_.GetR(a + 1);
     CompileCheckcg(ra1.GetTValue());
 }
 
 void Compiler::CompileSelf() {
-    auto table = new Register(cs_, GETARG_B(cs_.instr_), "rb");
-    auto key = Value::CreateByArg(cs_, GETARG_C(cs_.instr_), "rkc");
-    auto methodslot = new Register(cs_, GETARG_A(cs_.instr_), "ra");
-    Register selfslot(cs_, GETARG_A(cs_.instr_) + 1, "ra1");
-    selfslot.SetValue(table);
+    auto& table = stack_.GetR(GETARG_B(cs_.instr_));
+    auto& key = stack_.GetRK(GETARG_C(cs_.instr_));
+    auto& methodslot = stack_.GetR(GETARG_A(cs_.instr_));
+    auto& selfslot = stack_.GetR(GETARG_A(cs_.instr_) + 1);
+    selfslot.Assign(table);
     TableGet(cs_, table, key, methodslot).Compile();
 }
 
 void Compiler::CompileUnop(const std::string& function) {
-    Register ra(cs_, GETARG_A(cs_.instr_), "ra");
-    std::unique_ptr<Value> rkb(
-            Value::CreateByArg(cs_, GETARG_B(cs_.instr_), "rkb"));
-    auto args = {cs_.values_.state, ra.GetTValue(), rkb->GetTValue()};
+    auto& ra = stack_.GetR(GETARG_A(cs_.instr_));
+    auto& rkb = stack_.GetRK(GETARG_B(cs_.instr_));
+    auto args = {cs_.values_.state, ra.GetTValue(), rkb.GetTValue()};
     cs_.CreateCall(function, args);
     cs_.UpdateStack();
 }
@@ -280,12 +287,12 @@ void Compiler::CompileConcat() {
     cs_.CreateCall("luaV_concat", args);
     cs_.UpdateStack();
 
-    Register ra(cs_, a, "ra");
-    Register rb(cs_, b, "rb");
+    auto& ra = stack_.GetR(a);
+    auto& rb = stack_.GetR(b);
     ra.Assign(rb);
 
     if (a >= b) {
-        Register ra1(cs_, a + 1, "ra1");
+        auto& ra1 = stack_.GetR(a + 1);
         CompileCheckcg(ra1.GetTValue());
     } else {
         CompileCheckcg(rb.GetTValue());
@@ -295,51 +302,99 @@ void Compiler::CompileConcat() {
 }
 
 void Compiler::CompileJmp() {
-    cs_.builder_.CreateBr(cs_.blocks_[cs_.curr_ + GETARG_sBx(cs_.instr_) + 1]);
+    int a = GETARG_A(cs_.instr_);
+    if (a != 0) {
+        auto& r = stack_.GetR(a - 1);
+        cs_.CreateCall("luaF_close", {cs_.values_.state, r.GetTValue()});
+    }
+    cs_.B_.CreateBr(cs_.blocks_[cs_.curr_ + GETARG_sBx(cs_.instr_) + 1]);
 }
 
 void Compiler::CompileCmp(const std::string& function) {
-    std::unique_ptr<Value> rkb(
-            Value::CreateByArg(cs_, GETARG_B(cs_.instr_), "rkb"));
-    std::unique_ptr<Value> rkc(
-            Value::CreateByArg(cs_, GETARG_C(cs_.instr_), "rkc"));
-    auto args = {
-        cs_.values_.state,
-        rkb.GetTValue(),
-        rkc.GetTValue()
-    };
+    auto& rkb = stack_.GetRK(GETARG_B(cs_.instr_));
+    auto& rkc = stack_.GetRK(GETARG_C(cs_.instr_));
+    auto args = {cs_.values_.state, rkb.GetTValue(), rkc.GetTValue()};
     auto result = cs_.CreateCall(function, args, "result");
     cs_.UpdateStack();
 
     auto a = cs_.MakeInt(GETARG_A(cs_.instr_));
-    auto cmp = cs_.builder_.CreateICmpNE(result, a, "cmp");
+    auto cmp = cs_.B_.CreateICmpNE(result, a, "cmp");
     auto nextblock = cs_.blocks_[cs_.curr_ + 2];
     auto jmpblock = cs_.blocks_[cs_.curr_ + 1];
-    cs_.builder_.CreateCondBr(cmp, nextblock, jmpblock);
+    cs_.B_.CreateCondBr(cmp, nextblock, jmpblock);
 }
 
 void Compiler::CompileTest() {
-    Register ra(cs_, cs_.GetValueR(GETARG_A(cs_.instr_), "ra"));
-    auto args = {
-        cs_.MakeInt(GETARG_C(cs_.instr_)),
-        
-    };
-    auto test = cs_.ToBool(cs_.CreateCall("lll_test", args, "test"));
-    auto nextblock = cs_.blocks_[cs_.curr_ + 2];
-    auto jmpblock = cs_.blocks_[cs_.curr_ + 1];
-    cs_.builder_.CreateCondBr(test, nextblock, jmpblock);
+    auto checkbool = cs_.CreateSubBlock("checkbool");
+    auto checkfalse = cs_.CreateSubBlock("checkfalse", checkbool);
+    auto success = cs_.blocks_[cs_.curr_ + 2];
+    auto fail = cs_.blocks_[cs_.curr_ + 1];
+
+    auto& r = stack_.GetR(GETARG_A(cs_.instr_));
+    if (GETARG_C(cs_.instr_)) {
+        auto isnil = r.HasTag(LUA_TNIL);
+        cs_.B_.CreateCondBr(isnil, success, checkbool);
+
+        cs_.B_.SetInsertPoint(checkbool);
+        auto isbool = r.HasTag(LUA_TBOOLEAN);
+        cs_.B_.CreateCondBr(isbool, checkfalse, fail);
+
+        cs_.B_.SetInsertPoint(checkfalse);
+        auto bvalue = r.GetBoolean();
+        auto isfalse = cs_.B_.CreateICmpEQ(bvalue, cs_.MakeInt(0));
+        cs_.B_.CreateCondBr(isfalse, success, fail);
+    } else {
+        auto isnil = r.HasTag(LUA_TNIL);
+        cs_.B_.CreateCondBr(isnil, fail, checkbool);
+
+        cs_.B_.SetInsertPoint(checkbool);
+        auto isbool = r.HasTag(LUA_TBOOLEAN);
+        cs_.B_.CreateCondBr(isbool, checkfalse, success);
+
+        cs_.B_.SetInsertPoint(checkfalse);
+        auto bvalue = r.GetBoolean();
+        auto isfalse = cs_.B_.CreateICmpEQ(bvalue, cs_.MakeInt(0));
+        cs_.B_.CreateCondBr(isfalse, fail, success);
+    }
 }
 
 void Compiler::CompileTestset() {
-    auto rb = cs_.GetValueR(GETARG_B(cs_.instr_), "rb");
-    auto args = {cs_.MakeInt(GETARG_C(cs_.instr_)), rb};
-    auto result = cs_.ToBool(cs_.CreateCall("lll_test", args, "result"));
-    auto setblock = cs_.CreateSubBlock("set");
-    cs_.builder_.CreateCondBr(result, cs_.blocks_[cs_.curr_ + 2], setblock);
-    cs_.builder_.SetInsertPoint(setblock);
-    auto ra = cs_.GetValueR(GETARG_A(cs_.instr_), "ra");
-    cs_.SetRegister(ra, rb);
-    cs_.builder_.CreateBr(cs_.blocks_[cs_.curr_ + 1]);
+    auto checkbool = cs_.CreateSubBlock("checkbool");
+    auto checkfalse = cs_.CreateSubBlock("checkfalse", checkbool);
+    auto fail = cs_.CreateSubBlock("set", checkfalse);
+    auto success = cs_.blocks_[cs_.curr_ + 2];
+
+    auto& r = stack_.GetR(GETARG_B(cs_.instr_));
+    if (GETARG_C(cs_.instr_)) {
+        auto isnil = r.HasTag(LUA_TNIL);
+        cs_.B_.CreateCondBr(isnil, success, checkbool);
+
+        cs_.B_.SetInsertPoint(checkbool);
+        auto isbool = r.HasTag(LUA_TBOOLEAN);
+        cs_.B_.CreateCondBr(isbool, checkfalse, fail);
+
+        cs_.B_.SetInsertPoint(checkfalse);
+        auto bvalue = r.GetBoolean();
+        auto isfalse = cs_.B_.CreateICmpEQ(bvalue, cs_.MakeInt(0));
+        cs_.B_.CreateCondBr(isfalse, success, fail);
+    } else {
+        auto isnil = r.HasTag(LUA_TNIL);
+        cs_.B_.CreateCondBr(isnil, fail, checkbool);
+
+        cs_.B_.SetInsertPoint(checkbool);
+        auto isbool = r.HasTag(LUA_TBOOLEAN);
+        cs_.B_.CreateCondBr(isbool, checkfalse, success);
+
+        cs_.B_.SetInsertPoint(checkfalse);
+        auto bvalue = r.GetBoolean();
+        auto isfalse = cs_.B_.CreateICmpEQ(bvalue, cs_.MakeInt(0));
+        cs_.B_.CreateCondBr(isfalse, fail, success);
+    }
+
+    cs_.B_.SetInsertPoint(fail);
+    auto& ra = stack_.GetR(GETARG_A(cs_.instr_));
+    ra.Assign(r);
+    cs_.B_.CreateBr(cs_.blocks_[cs_.curr_ + 1]);
 }
 
 void Compiler::CompileCall() {
@@ -347,9 +402,10 @@ void Compiler::CompileCall() {
     int b = GETARG_B(cs_.instr_);
     if (b != 0)
         cs_.SetTop(a + b);
+    auto& ra = stack_.GetR(a);
     auto args = {
         cs_.values_.state,
-        cs_.GetValueR(a, "ra"),
+        ra.GetTValue(),
         cs_.MakeInt(GETARG_C(cs_.instr_) - 1)
     };
     cs_.CreateCall("luaD_callnoyield", args);
@@ -358,22 +414,20 @@ void Compiler::CompileCall() {
 
 void Compiler::CompileTailcall() {
     // Tailcall returns a negative value that signals the call must be performed
-    auto base = cs_.GetValueR(0, "base");
     if (cs_.proto_->sizep > 0)
-        cs_.CreateCall("luaF_close", {cs_.values_.state, base});
+        cs_.CreateCall("luaF_close", {cs_.values_.state, cs_.GetBase()});
     int a = GETARG_A(cs_.instr_);
     int b = GETARG_B(cs_.instr_);
     if (b != 0)
         cs_.SetTop(a + b);
     auto diff = cs_.TopDiff(a);
-    auto ret = cs_.builder_.CreateNeg(diff, "ret");
-    cs_.builder_.CreateRet(ret);
+    auto ret = cs_.B_.CreateNeg(diff, "ret");
+    cs_.B_.CreateRet(ret);
 }
 
 void Compiler::CompileReturn() {
-    auto base = cs_.GetValueR(0, "base");
     if (cs_.proto_->sizep > 0)
-        cs_.CreateCall("luaF_close", {cs_.values_.state, base});
+        cs_.CreateCall("luaF_close", {cs_.values_.state, cs_.GetBase()});
     int a = GETARG_A(cs_.instr_);
     int b = GETARG_B(cs_.instr_);
     llvm::Value* nresults = nullptr;
@@ -385,32 +439,35 @@ void Compiler::CompileReturn() {
         nresults = cs_.MakeInt(b - 1);
         cs_.SetTop(a + b - 1);
     }
-    cs_.builder_.CreateRet(nresults);
+    cs_.B_.CreateRet(nresults);
 }
 
 void Compiler::CompileForloop() {
-    auto ra = cs_.GetValueR(GETARG_A(cs_.instr_), "ra");
-    auto jump = cs_.ToBool(cs_.CreateCall("lll_forloop", {ra}, "jump"));
+    auto& ra = stack_.GetR(GETARG_A(cs_.instr_));
+    auto args = {ra.GetTValue()};
+    auto jump = cs_.ToBool(cs_.CreateCall("lll_forloop", args, "jump"));
     auto jumpblock = cs_.blocks_[cs_.curr_ + 1 + GETARG_sBx(cs_.instr_)];
-    cs_.builder_.CreateCondBr(jump, jumpblock, cs_.blocks_[cs_.curr_ + 1]);
+    cs_.B_.CreateCondBr(jump, jumpblock, cs_.blocks_[cs_.curr_ + 1]);
 }
 
 void Compiler::CompileForprep() {
-    auto args = {cs_.values_.state, cs_.GetValueR(GETARG_A(cs_.instr_), "ra")};
+    auto& ra = stack_.GetR(GETARG_A(cs_.instr_));
+    auto args = {cs_.values_.state, ra.GetTValue()};
     cs_.CreateCall("lll_forprep", args);
-    cs_.builder_.CreateBr(cs_.blocks_[cs_.curr_ + 1 + GETARG_sBx(cs_.instr_)]);
+    cs_.B_.CreateBr(cs_.blocks_[cs_.curr_ + 1 + GETARG_sBx(cs_.instr_)]);
 }
 
 void Compiler::CompileTforcall() {
     int a = GETARG_A(cs_.instr_);
     int cb = a + 3;
-    cs_.SetRegister(cs_.GetValueR(cb + 2, "cb2"), cs_.GetValueR(a + 2, "ra2"));
-    cs_.SetRegister(cs_.GetValueR(cb + 1, "cb1"), cs_.GetValueR(a + 1, "ra1"));
-    cs_.SetRegister(cs_.GetValueR(cb, "cb"), cs_.GetValueR(a, "ra"));
+    auto& rcb = stack_.GetR(cb);
+    rcb.Assign(stack_.GetR(a));
+    stack_.GetR(cb + 1).Assign(stack_.GetR(a + 1));
+    stack_.GetR(cb + 2).Assign(stack_.GetR(a + 2));
     cs_.SetTop(cb + 3);
     auto args = {
         cs_.values_.state,
-        cs_.GetValueR(cb, "cb"),
+        rcb.GetTValue(),
         cs_.MakeInt(GETARG_C(cs_.instr_))
     };
     cs_.CreateCall("luaD_callnoyield", args);
@@ -420,23 +477,19 @@ void Compiler::CompileTforcall() {
 
 void Compiler::CompileTforloop() {
     int a = GETARG_A(cs_.instr_);
-    auto ra1 = cs_.GetValueR(a + 1, "ra1");
-    auto tag = cs_.LoadField(ra1, cs_.rt_.MakeIntT(sizeof(int)),
-            offsetof(TValue, tt_), "tag");
-    auto notnil = cs_.builder_.CreateICmpNE(tag, cs_.MakeInt(LUA_TNIL),
-            "notnil");
-    auto continueblock = cs_.CreateSubBlock("continue");
-    auto jmpblock = cs_.blocks_[cs_.curr_ + 1];
-    cs_.builder_.CreateCondBr(notnil, continueblock, jmpblock);
+    auto& ra1 = stack_.GetR(a + 1);
+    auto isnil = ra1.HasTag(LUA_TNIL);
+    auto end = cs_.blocks_[cs_.curr_ + 1];
+    auto cont = cs_.CreateSubBlock("continue");
+    cs_.B_.CreateCondBr(isnil, end, cont);
 
-    cs_.builder_.SetInsertPoint(continueblock);
-    auto ra = cs_.GetValueR(a, "ra");
-    cs_.SetRegister(ra, ra1);
-    cs_.builder_.CreateBr(cs_.blocks_[cs_.curr_ + 1 + GETARG_sBx(cs_.instr_)]);
+    cs_.B_.SetInsertPoint(cont);
+    auto& ra = stack_.GetR(a);
+    ra.Assign(ra1);
+    cs_.B_.CreateBr(cs_.blocks_[cs_.curr_ + 1 + GETARG_sBx(cs_.instr_)]);
 }
 
 void Compiler::CompileSetlist() {
-
     int a = GETARG_A(cs_.instr_);
     int b = GETARG_B(cs_.instr_);
     int c = GETARG_C(cs_.instr_);
@@ -446,21 +499,25 @@ void Compiler::CompileSetlist() {
     auto n = (b != 0 ? cs_.MakeInt(b) : cs_.TopDiff(a + 1));
     auto fields = cs_.MakeInt((c - 1) * LFIELDS_PER_FLUSH);
 
-    auto args = {cs_.values_.state, cs_.GetValueR(a, "ra"), fields, n};
+    auto& ra = stack_.GetR(a);
+    auto args = {cs_.values_.state, ra.GetTValue(), fields, n};
     cs_.CreateCall("lll_setlist", args);
     cs_.ReloadTop();
 }
 
 void Compiler::CompileClosure() {
+    int a = GETARG_A(cs_.instr_);
+    auto& ra = stack_.GetR(a);
     auto args = {
         cs_.values_.state,
         cs_.values_.closure,
-        cs_.GetValueR(0, "base"),
-        cs_.GetValueR(GETARG_A(cs_.instr_), "ra"),
+        cs_.GetBase(),
+        ra.GetTValue(),
         cs_.MakeInt(GETARG_Bx(cs_.instr_))
     };
     cs_.CreateCall("lll_closure", args);
-    CompileCheckcg(cs_.GetValueR(GETARG_A(cs_.instr_) + 1, "ra1"));
+    auto& ra1 = stack_.GetR(a + 1);
+    CompileCheckcg(ra1.GetTValue());
 }
 
 void Compiler::CompileCheckcg(llvm::Value* reg) {

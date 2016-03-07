@@ -51,17 +51,17 @@ void TableSet::Compile() {
 }
 
 void TableSet::CheckTable() {
-    B_.SetInsertPoint(entry_);
-    B_.CreateCondBr(table_.IsTable(), switchtag_, finishset_);
+    cs_.B_.SetInsertPoint(entry_);
+    cs_.B_.CreateCondBr(table_.HasTag(ctb(LUA_TTABLE)), switchtag_, finishset_);
     auto ttvalue = static_cast<llvm::PointerType*>(cs_.rt_.GetType("TValue"));
     auto nulltvalue = llvm::ConstantPointerNull::get(ttvalue);
     oldvals_.push_back({nulltvalue, entry_});
 }
 
 void TableSet::SwithTag() {
-    B_.SetInsertPoint(switchtag_);
+    cs_.B_.SetInsertPoint(switchtag_);
     tablevalue_ = table_.GetTable();
-    auto s = B_.CreateSwitch(key_.GetTag(), getany_, 4);
+    auto s = cs_.B_.CreateSwitch(key_.GetTag(), getany_, 4);
     auto AddCase = [&](int v, llvm::BasicBlock* block) {
         s->addCase(static_cast<llvm::ConstantInt*>(cs_.MakeInt(v)), block);
     };
@@ -78,11 +78,11 @@ void TableSet::PerformGet() {
     PerformGetCase(getany_, &Value::GetTValue, "");
 
     // A nil key will always return a nil value
-    B_.SetInsertPoint(getnil_);
+    cs_.B_.SetInsertPoint(getnil_);
     auto ttvalue = cs_.rt_.GetType("TValue");
     auto nilobj = cs_.InjectPointer(ttvalue,
             const_cast<TValue*>(luaO_nilobject));
-    B_.CreateBr(finishset_);
+    cs_.B_.CreateBr(finishset_);
     oldvals_.push_back({nilobj, getnil_});
 }
 
@@ -95,46 +95,47 @@ void TableSet::CallGCBarrier() {
             checkvaluewhite);
 
     // iscollectable(v)?
-    B_.SetInsertPoint(callgcbarrier_);
+    cs_.B_.SetInsertPoint(callgcbarrier_);
     slot_ = CreatePHI(cs_.rt_.GetType("TValue"), slots_, "slot");
     auto collectablebit = cs_.MakeInt(BIT_ISCOLLECTABLE);
-    auto iscoll = cs_.ToBool(B_.CreateAnd(value_.GetTag(), collectablebit));
-    B_.CreateCondBr(iscoll, checktableblack, fastset_);
+    auto iscoll = cs_.ToBool(cs_.B_.CreateAnd(value_.GetTag(), collectablebit));
+    cs_.B_.CreateCondBr(iscoll, checktableblack, fastset_);
 
     // isblack(table)?
-    B_.SetInsertPoint(checktableblack);
+    cs_.B_.SetInsertPoint(checktableblack);
     auto tlu_byte = cs_.rt_.MakeIntT(sizeof(lu_byte));
     auto markedoffset = offsetof(GCObject, marked);
     auto tablemarked = cs_.LoadField(tablevalue_, tlu_byte, markedoffset,
             "tablemarked");
     auto blackbit = cs_.MakeInt(bitmask(BLACKBIT), tlu_byte);
-    auto isblack = cs_.ToBool(B_.CreateAnd(tablemarked, blackbit));
-    B_.CreateCondBr(isblack, checkvaluewhite, fastset_);
+    auto isblack = cs_.ToBool(cs_.B_.CreateAnd(tablemarked, blackbit));
+    cs_.B_.CreateCondBr(isblack, checkvaluewhite, fastset_);
 
     // iswhite(gcvalue(v)))?
-    B_.SetInsertPoint(checkvaluewhite);
+    cs_.B_.SetInsertPoint(checkvaluewhite);
     auto gcvalue = value_.GetGCValue();
     auto valuemarked = cs_.LoadField(gcvalue, tlu_byte, markedoffset,
             "valuemarked");
     auto whitebits = cs_.MakeInt(WHITEBITS, tlu_byte);
-    auto iswhite = cs_.ToBool(B_.CreateAnd(valuemarked, whitebits));
-    B_.CreateCondBr(iswhite, callbarrierback, fastset_);
+    auto iswhite = cs_.ToBool(cs_.B_.CreateAnd(valuemarked, whitebits));
+    cs_.B_.CreateCondBr(iswhite, callbarrierback, fastset_);
 
     // luaC_barrierback_(L,p)
-    B_.SetInsertPoint(callbarrierback);
+    cs_.B_.SetInsertPoint(callbarrierback);
     auto args = {cs_.values_.state, tablevalue_};
     cs_.CreateCall("luaC_barrierback_", args);
-    B_.CreateBr(fastset_);
+    cs_.B_.CreateBr(fastset_);
 }
 
 void TableSet::FastSet() {
-    B_.SetInsertPoint(fastset_);
-    cs_.SetRegister(slot_, value_.GetTValue());
-    B_.CreateBr(exit_);
+    cs_.B_.SetInsertPoint(fastset_);
+    MutableValue slot(cs_, slot_);
+    slot.Assign(value_);
+    cs_.B_.CreateBr(exit_);
 }
 
 void TableSet::FinishSet() {
-    B_.SetInsertPoint(finishset_);
+    cs_.B_.SetInsertPoint(finishset_);
     auto ttvalue = cs_.rt_.GetType("TValue");
     auto args = {
         cs_.values_.state,
@@ -145,19 +146,19 @@ void TableSet::FinishSet() {
     };
     cs_.CreateCall("luaV_finishset", args);
     cs_.UpdateStack();
-    B_.CreateBr(exit_);
+    cs_.B_.CreateBr(exit_);
 }
 
 void TableSet::PerformGetCase(llvm::BasicBlock* block, GetMethod getmethod,
         const char* suffix) {
-    B_.SetInsertPoint(block);
+    cs_.B_.SetInsertPoint(block);
     auto tableget = std::string("luaH_get") + suffix;
     auto args = {tablevalue_, (key_.*getmethod)()};
     auto result = cs_.CreateCall(tableget, args, "result");
     auto tag = cs_.LoadField(result, cs_.rt_.MakeIntT(sizeof(int)),
             offsetof(TValue, tt_), "result.tag");
-    auto isnil = B_.CreateICmpEQ(tag, cs_.MakeInt(LUA_TNIL));
-    B_.CreateCondBr(isnil, finishset_, callgcbarrier_);
+    auto isnil = cs_.B_.CreateICmpEQ(tag, cs_.MakeInt(LUA_TNIL));
+    cs_.B_.CreateCondBr(isnil, finishset_, callgcbarrier_);
     oldvals_.push_back({result, block});
     slots_.push_back({result, block});
 }

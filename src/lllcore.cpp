@@ -29,7 +29,7 @@ extern "C" {
     p->lllfunction = reinterpret_cast<LLLFunction>(engine->GetFunction()); }
 
 static int autocompile_ = 1;
-static int callstocompile_ = 2;
+static int callstocompile_ = 50;
 
 void writeerror (lua_State *L, char **outerr, const char *err) {
     if (outerr) {

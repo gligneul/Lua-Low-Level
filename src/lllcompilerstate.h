@@ -89,8 +89,8 @@ public:
             function = llvm::Function::Create(functype,
                     llvm::Function::ExternalLinkage, "printf", module_.get());
         }
-        auto callargs = {builder_.CreateGlobalStringPtr(format+ "\n"), args...};
-        builder_.CreateCall(function, callargs);
+        auto callargs = {B_.CreateGlobalStringPtr(format+ "\n"), args...};
+        B_.CreateCall(function, callargs);
     }
 
     lua_State* L_;
@@ -100,12 +100,12 @@ public:
     std::unique_ptr<llvm::Module> module_;
     llvm::Function* function_;
     std::vector<llvm::BasicBlock*> blocks_;
-    llvm::IRBuilder<> builder_;
+    llvm::IRBuilder<> B_;
     struct {
         llvm::Value* state;
         llvm::Value* closure;
         llvm::Value* ci;
-        llvm::Value* k;
+        llvm::Value* upvals;
         llvm::Value* base;
         llvm::Value* bnumber;
         llvm::Value* cnumber;

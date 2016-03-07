@@ -67,7 +67,7 @@ return function(functions, arguments)
         --print(fstr)
         local flua = chunk()
         local flll = chunk()
-        lll.compile(flll)
+        assert(lll.compile(flll))
         for _, astr in ipairs(arguments) do
             local a = tovalues(astr)
             local oklua, retlua = pcall(flua, table.unpack(a))

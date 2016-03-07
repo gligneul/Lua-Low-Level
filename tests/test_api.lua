@@ -12,7 +12,7 @@ assert(lll.isAutoCompileEnable() == true)
 -- Tests ac
 local function f() return 123 end
 assert(lll.isCompiled(f) == false)
-assert(lll.getCallsToCompile() == 2)
+assert(lll.getCallsToCompile() == 50)
 for i = 1, lll.getCallsToCompile() do f() end
 assert(lll.isCompiled(f) == true)
 
@@ -40,7 +40,7 @@ assert(lll.isCompiled(h) == false)
 lll.setCallsToCompile(10)
 for i = 1, 2 do h() end
 assert(lll.isCompiled(h) == false)
-for i = 3, lll.getCallsToCompile() do h() end
+for i = 3, 10 do h() end
 assert(lll.isCompiled(h) == true)
 
 -- Execute compiled functions

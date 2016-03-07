@@ -11,11 +11,11 @@
 #ifndef LLLVARARG_H
 #define LLLVARARG_H
 
-#include <memory>
-
 #include "lllopcode.h"
 
 namespace lll {
+
+class Register;
 
 class Vararg : public Opcode {
 public:

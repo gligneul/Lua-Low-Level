@@ -14,11 +14,10 @@
 #include <string>
 #include <vector>
 
-#include <llvm/IR/IRBuilder.h>
-
 namespace llvm {
 class BasicBlock;
 class Value;
+class Type;
 }
 
 namespace lll {
@@ -43,7 +42,6 @@ protected:
             const std::string& name);
 
     CompilerState& cs_;
-    llvm::IRBuilder<>& B_;
     llvm::BasicBlock* entry_;
     llvm::BasicBlock* exit_;
 };

@@ -9,6 +9,7 @@
 
 #include "lllvararg.h"
 #include "lllcompilerstate.h"
+#include "lllvalue.h"
 
 extern "C" {
 #include "lprefix.h"
@@ -39,17 +40,17 @@ void Vararg::Compile() {
 }
 
 void Vararg::ComputeAvailableArgs() {
-    B_.SetInsertPoint(entry_);
+    cs_.B_.SetInsertPoint(entry_);
     auto func = cs_.LoadField(cs_.values_.ci, cs_.rt_.GetType("TValue"),
             offsetof(CallInfo, func), "func");
-    auto base = cs_.GetValueR(0, "base");
-    auto vadiff = B_.CreatePtrDiff(base, func, "vadiff");
+    auto base = cs_.GetBase();
+    auto vadiff = cs_.B_.CreatePtrDiff(base, func, "vadiff");
     auto tint = cs_.rt_.MakeIntT(sizeof(int));
-    auto vasize = B_.CreateIntCast(vadiff, tint, false, "vasize");
+    auto vasize = cs_.B_.CreateIntCast(vadiff, tint, false, "vasize");
     auto numparams1 = cs_.MakeInt(cs_.proto_->numparams + 1);
-    auto n = B_.CreateSub(vasize, numparams1, "n");
-    auto n_ge_0 = B_.CreateICmpSGE(n, cs_.MakeInt(0), "n.ge.0");
-    available_ = B_.CreateSelect(n_ge_0, n, cs_.MakeInt(0));
+    auto n = cs_.B_.CreateSub(vasize, numparams1, "n");
+    auto n_ge_0 = cs_.B_.CreateICmpSGE(n, cs_.MakeInt(0), "n.ge.0");
+    available_ = cs_.B_.CreateSelect(n_ge_0, n, cs_.MakeInt(0));
 }
 
 void Vararg::ComputeRequiredArgs() {
@@ -65,48 +66,48 @@ void Vararg::ComputeRequiredArgs() {
 }
 
 void Vararg::ComputeNMoves() {
-    auto required_lt_available = B_.CreateICmpSLT(required_, available_,
+    auto required_lt_available = cs_.B_.CreateICmpSLT(required_, available_,
             "required.lt.available");
-    nmoves_ = B_.CreateSelect(required_lt_available, required_, available_);
-    B_.CreateBr(movecheck_);
+    nmoves_ = cs_.B_.CreateSelect(required_lt_available, required_, available_);
+    cs_.B_.CreateBr(movecheck_);
 }
 
 void Vararg::MoveAvailable() {
-    B_.SetInsertPoint(movecheck_);
-    auto i = B_.CreatePHI(cs_.rt_.MakeIntT(sizeof(int)), 2, "i");
+    cs_.B_.SetInsertPoint(movecheck_);
+    auto i = cs_.B_.CreatePHI(cs_.rt_.MakeIntT(sizeof(int)), 2, "i");
     i->addIncoming(cs_.MakeInt(0), entry_);
-    i->addIncoming(B_.CreateAdd(i, cs_.MakeInt(1)), move_);
-    auto i_lt_nmoves = B_.CreateICmpSLT(i, nmoves_, "i.lt.nmoves");
-    B_.CreateCondBr(i_lt_nmoves, move_, fillcheck_);
+    i->addIncoming(cs_.B_.CreateAdd(i, cs_.MakeInt(1)), move_);
+    auto i_lt_nmoves = cs_.B_.CreateICmpSLT(i, nmoves_, "i.lt.nmoves");
+    cs_.B_.CreateCondBr(i_lt_nmoves, move_, fillcheck_);
 
-    B_.SetInsertPoint(move_);
-    auto vidx = B_.CreateSub(i, available_, "valueidx");
-    auto base = cs_.GetValueR(0, "base");
-    auto v = B_.CreateGEP(base, vidx, "value");
-    auto r = GetRegisterFromA(i);
-    cs_.SetRegister(r, v);
-    B_.CreateBr(movecheck_);
+    cs_.B_.SetInsertPoint(move_);
+    auto vidx = cs_.B_.CreateSub(i, available_, "valueidx");
+    auto base = cs_.GetBase();
+    MutableValue v(cs_, cs_.B_.CreateGEP(base, vidx, "value"));
+    MutableValue r(cs_, GetRegisterFromA(i));
+    r.Assign(v);
+    cs_.B_.CreateBr(movecheck_);
 }
 
 void Vararg::FillRequired() {
-    B_.SetInsertPoint(fillcheck_);
-    auto j = B_.CreatePHI(cs_.rt_.MakeIntT(sizeof(int)), 2, "j");
+    cs_.B_.SetInsertPoint(fillcheck_);
+    auto j = cs_.B_.CreatePHI(cs_.rt_.MakeIntT(sizeof(int)), 2, "j");
     j->addIncoming(nmoves_, movecheck_);
-    j->addIncoming(B_.CreateAdd(j, cs_.MakeInt(1)), fill_);
-    auto j_lt_req = B_.CreateICmpSLT(j, required_, "j.lt.required");
-    B_.CreateCondBr(j_lt_req, fill_, exit_);
+    j->addIncoming(cs_.B_.CreateAdd(j, cs_.MakeInt(1)), fill_);
+    auto j_lt_req = cs_.B_.CreateICmpSLT(j, required_, "j.lt.required");
+    cs_.B_.CreateCondBr(j_lt_req, fill_, exit_);
 
-    B_.SetInsertPoint(fill_);
-    auto r = GetRegisterFromA(j);
-    cs_.SetField(r, cs_.MakeInt(LUA_TNIL), offsetof(TValue, tt_), "tag");
-    B_.CreateBr(fillcheck_);
+    cs_.B_.SetInsertPoint(fill_);
+    MutableValue r(cs_, GetRegisterFromA(j));
+    r.SetTag(LUA_TNIL);
+    cs_.B_.CreateBr(fillcheck_);
 }
 
 llvm::Value* Vararg::GetRegisterFromA(llvm::Value* offset) {
     auto a = cs_.MakeInt(GETARG_A(cs_.instr_));
-    auto idx = B_.CreateAdd(a, offset, "idx");
-    auto base = cs_.GetValueR(0, "base");
-    return B_.CreateGEP(base, idx, "register");
+    auto idx = cs_.B_.CreateAdd(a, offset, "idx");
+    auto base = cs_.GetBase();
+    return cs_.B_.CreateGEP(base, idx, "register");
 }
 
 }

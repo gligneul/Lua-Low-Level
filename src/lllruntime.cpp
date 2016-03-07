@@ -112,10 +112,6 @@ static void lll_not (lua_State *L, TValue *ra, TValue *rb) {
   setbvalue(ra, res);
 }
 
-static int lll_test (int c, TValue *r) {
-  return c ? l_isfalse(r) : !l_isfalse(r);
-}
-
 static void lll_checkcg (lua_State *L, CallInfo *ci, TValue *c) {
     // From lvm.c checkGC(L,c)
     luaC_condGC(L, L->top = (c), L->top = ci->top);
@@ -317,7 +313,8 @@ void Runtime::InitTypes() {
     ADDTYPE(TString);
 
     auto ttvaluefields = {
-        MakeIntT(sizeof(lua_Integer)),
+        MakeIntT(sizeof(Value)),
+        MakeIntT(sizeof(int)),
         MakeIntT(sizeof(int))
     };
     auto ttvalue = llvm::StructType::create(ttvaluefields, "TValue");
@@ -368,7 +365,6 @@ void Runtime::InitFunctions() {
     LOADUNOP(lll_unm);
     LOADUNOP(lll_bnot);
     LOADUNOP(lll_not);
-    ADDFUNCTION(lll_test, tint, tint, ttvalue);
     ADDFUNCTION(lll_checkcg, tvoid, tstate, tci, ttvalue);
     ADDFUNCTION(lll_newtable, ttable, tstate, ttvalue);
     ADDFUNCTION(lll_upvalbarrier, tvoid, tstate, tupval);

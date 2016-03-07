@@ -14,14 +14,13 @@ namespace lll {
 
 Opcode::Opcode(CompilerState& cs) :
     cs_(cs),
-    B_(cs_.builder_),
     entry_(cs.blocks_[cs.curr_]),
     exit_(cs.blocks_[cs.curr_ + 1]) {
 }
 
 llvm::Value* Opcode::CreatePHI(llvm::Type* type, const IncomingList& incoming,
             const std::string& name) {
-    auto phi = B_.CreatePHI(type, incoming.size(), name);
+    auto phi = cs_.B_.CreatePHI(type, incoming.size(), name);
     for (auto& i : incoming)
         phi->addIncoming(i.first, i.second);
     return phi;
