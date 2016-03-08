@@ -63,7 +63,7 @@ public:
     llvm::Value* GetBase();
 
     // Updates base value
-    void UpdateStack();
+    void UpdateBase();
 
     // Sets L->top = ci->top
     void ReloadTop();
@@ -73,6 +73,9 @@ public:
 
     // Returns the ptrdiff from register $n to top
     llvm::Value* TopDiff(int n);
+
+    // Creates the entry block
+    void InitEntryBlock();
 
     // Creates a sub-block with $suffix
     llvm::BasicBlock* CreateSubBlock(const std::string& suffix,
@@ -99,8 +102,9 @@ public:
     Runtime& rt_;
     std::unique_ptr<llvm::Module> module_;
     llvm::Function* function_;
-    std::vector<llvm::BasicBlock*> blocks_;
     llvm::IRBuilder<> B_;
+    llvm::BasicBlock* entry_;
+    std::vector<llvm::BasicBlock*> blocks_;
     struct {
         llvm::Value* state;
         llvm::Value* closure;
@@ -116,9 +120,6 @@ public:
 private:
     // Creates the main function
     llvm::Function* CreateMainFunction();
-
-    // Creates one basic block for each instruction
-    void CreateBlocks();
 };
 
 }

@@ -21,7 +21,7 @@ extern "C" {
 namespace lll {
 
 Logical::Logical(CompilerState& cs, Stack& stack) :
-    Opcode(cs),
+    Opcode(cs, stack),
     ra_(stack.GetR(GETARG_A(cs.instr_))),
     rkb_(stack.GetRK(GETARG_B(cs.instr_))),
     rkc_(stack.GetRK(GETARG_C(cs.instr_))),
@@ -64,7 +64,7 @@ void Logical::ComputeTaggedMethod() {
         cs_.MakeInt(GetMethodTag())
     };
     cs_.CreateCall("luaT_trybinTM", args);
-    cs_.UpdateStack();
+    stack_.Update();
     cs_.B_.CreateBr(exit_);
 }
 

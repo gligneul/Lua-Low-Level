@@ -17,7 +17,6 @@
 namespace lll {
 
 class Register;
-class Stack;
 class Value;
 
 class Logical : public Opcode {

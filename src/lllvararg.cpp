@@ -20,8 +20,8 @@ extern "C" {
 
 namespace lll {
 
-Vararg::Vararg(CompilerState& cs) :
-    Opcode(cs),
+Vararg::Vararg(CompilerState& cs, Stack& stack) :
+    Opcode(cs, stack),
     available_(nullptr),
     required_(nullptr),
     nmoves_(nullptr),
@@ -59,7 +59,7 @@ void Vararg::ComputeRequiredArgs() {
     if (b == 0) {
         required_ = available_;
         cs_.CreateCall("lll_checkstack", {cs_.values_.state, available_});
-        cs_.UpdateStack();
+        stack_.Update();
         auto top = GetRegisterFromA(available_);
         cs_.SetField(cs_.values_.state, top, offsetof(lua_State, top), "top");
     }
@@ -83,8 +83,8 @@ void Vararg::MoveAvailable() {
     cs_.B_.SetInsertPoint(move_);
     auto vidx = cs_.B_.CreateSub(i, available_, "valueidx");
     auto base = cs_.GetBase();
-    MutableValue v(cs_, cs_.B_.CreateGEP(base, vidx, "value"));
-    MutableValue r(cs_, GetRegisterFromA(i));
+    RTRegister v(cs_, cs_.B_.CreateGEP(base, vidx, "value"));
+    RTRegister r(cs_, GetRegisterFromA(i));
     r.Assign(v);
     cs_.B_.CreateBr(movecheck_);
 }
@@ -98,8 +98,8 @@ void Vararg::FillRequired() {
     cs_.B_.CreateCondBr(j_lt_req, fill_, exit_);
 
     cs_.B_.SetInsertPoint(fill_);
-    MutableValue r(cs_, GetRegisterFromA(j));
-    r.SetTag(LUA_TNIL);
+    RTRegister r(cs_, GetRegisterFromA(j));
+    r.SetTagK(LUA_TNIL);
     cs_.B_.CreateBr(fillcheck_);
 }
 

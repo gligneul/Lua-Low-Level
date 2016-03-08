@@ -21,7 +21,8 @@ class Value;
 class TableSet : public Opcode {
 public:
     // Constructor
-    TableSet(CompilerState& cs, Value& table, Value& key, Value& value);
+    TableSet(CompilerState& cs, Stack& stack, Value& table, Value& key,
+            Value& value);
 
     // Compiles the opcode
     void Compile();

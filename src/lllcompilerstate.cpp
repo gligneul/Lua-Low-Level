@@ -30,11 +30,17 @@ CompilerState::CompilerState(lua_State* L, Proto* proto) :
     rt_(*Runtime::Instance()),
     module_(new llvm::Module("lll_module", context_)),
     function_(CreateMainFunction()),
-    blocks_(proto_->sizecode, nullptr),
     B_(context_),
+    entry_(llvm::BasicBlock::Create(context_, "entry", function_)),
+    blocks_(proto_->sizecode, nullptr),
     curr_(0) {
     module_->setTargetTriple(llvm::sys::getDefaultTargetTriple());
-    CreateBlocks();
+    for (size_t i = 0; i < blocks_.size(); ++i) {
+        auto instruction = luaP_opnames[GET_OPCODE(proto_->code[i])];
+        std::stringstream name;
+        name << "block." << i << "." << instruction;
+        blocks_[i] = llvm::BasicBlock::Create(context_, name.str(), function_);
+    }
 }
 
 llvm::Function* CompilerState::CreateMainFunction() {
@@ -47,15 +53,14 @@ llvm::Function* CompilerState::CreateMainFunction() {
             name.str(), module_.get());
 }
 
-void CompilerState::CreateBlocks() {
+void CompilerState::InitEntryBlock() {
+    B_.SetInsertPoint(entry_);
+
     auto& args = function_->getArgumentList();
     values_.state = &args.front();
     values_.state->setName("state");
     values_.closure = &args.back();
     values_.closure->setName("closure");
-
-    auto entry = llvm::BasicBlock::Create(context_, "entry", function_);
-    B_.SetInsertPoint(entry);
 
     auto tci = rt_.GetType("CallInfo");
     values_.ci = LoadField(values_.state, tci, offsetof(lua_State, ci), "ci");
@@ -69,16 +74,7 @@ void CompilerState::CreateBlocks() {
 
     auto ttvalue = rt_.GetType("TValue");
     values_.base = B_.CreateAlloca(ttvalue, nullptr, "base");
-    UpdateStack();
-
-    for (size_t i = 0; i < blocks_.size(); ++i) {
-        auto instruction = luaP_opnames[GET_OPCODE(proto_->code[i])];
-        std::stringstream name;
-        name << "block." << i << "." << instruction;
-        blocks_[i] = llvm::BasicBlock::Create(context_, name.str(), function_);
-    }
-
-    B_.CreateBr(blocks_[0]);
+    UpdateBase();
 }
 
 llvm::Value* CompilerState::MakeInt(int64_t value, llvm::Type* type) {
@@ -129,7 +125,7 @@ llvm::Value* CompilerState::GetBase() {
     return B_.CreateLoad(values_.base);
 }
 
-void CompilerState::UpdateStack() {
+void CompilerState::UpdateBase() {
     auto base = LoadField(values_.ci, rt_.GetType("TValue"),
             offsetof(CallInfo, u.l.base), "u.l.base");
     B_.CreateStore(base, values_.base);

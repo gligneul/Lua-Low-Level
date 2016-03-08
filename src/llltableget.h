@@ -24,7 +24,8 @@ class Register;
 class TableGet : public Opcode {
 public:
     // Constructor
-    TableGet(CompilerState& cs, Value& table, Value& key, Register& dest);
+    TableGet(CompilerState& cs, Stack& stack, Value& table, Value& key,
+            Register& dest);
 
     // Compiles the opcode
     void Compile();

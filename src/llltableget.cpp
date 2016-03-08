@@ -22,9 +22,9 @@ extern "C" {
 
 namespace lll {
 
-TableGet::TableGet(CompilerState& cs, Value& table, Value& key,
+TableGet::TableGet(CompilerState& cs, Stack& stack, Value& table, Value& key,
         Register& dest) :
-    Opcode(cs),
+    Opcode(cs, stack),
     table_(table),
     key_(key),
     dest_(dest),
@@ -123,7 +123,7 @@ void TableGet::SearchForTM() {
 void TableGet::SaveResult() {
     cs_.B_.SetInsertPoint(saveresult_);
     auto ttvalue = cs_.rt_.GetType("TValue");
-    MutableValue result(cs_, CreatePHI(ttvalue, results_, "resultphi"));
+    RTRegister result(cs_, CreatePHI(ttvalue, results_, "resultphi"));
     dest_.Assign(result);
     cs_.B_.CreateBr(exit_);
 }
@@ -131,15 +131,16 @@ void TableGet::SaveResult() {
 void TableGet::FinishGet() {
     cs_.B_.SetInsertPoint(finishget_);
     auto ttvalue = cs_.rt_.GetType("TValue");
+    auto tmphi = CreatePHI(ttvalue, tms_, "tmphi");
     auto args = {
         cs_.values_.state,
         table_.GetTValue(),
         key_.GetTValue(),
         dest_.GetTValue(),
-        CreatePHI(ttvalue, tms_, "tmphi")
+        tmphi
     };
     cs_.CreateCall("luaV_finishget", args);
-    cs_.UpdateStack();
+    stack_.Update();
     cs_.B_.CreateBr(exit_);
 }
 

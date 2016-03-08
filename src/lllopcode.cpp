@@ -12,8 +12,9 @@
 
 namespace lll {
 
-Opcode::Opcode(CompilerState& cs) :
+Opcode::Opcode(CompilerState& cs, Stack& stack) :
     cs_(cs),
+    stack_(stack),
     entry_(cs.blocks_[cs.curr_]),
     exit_(cs.blocks_[cs.curr_ + 1]) {
 }

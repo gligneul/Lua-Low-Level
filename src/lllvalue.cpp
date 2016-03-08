@@ -71,17 +71,12 @@ llvm::Value* Constant::GetGCValue() {
     return cs_.InjectPointer(tgcobject, gcvalue(tvalue_));
 }
 
-MutableValue::MutableValue(CompilerState& cs, llvm::Value* tvalue) :
-    Value(cs),
-    tvalue_(tvalue) {
+MutableValue::MutableValue(CompilerState& cs) :
+    Value(cs) {
 }
 
 llvm::Value* MutableValue::GetTag() {
-    return cs_.B_.CreateLoad(GetField(TAG), tvalue_->getName() + ".tag");
-}
-
-llvm::Value* MutableValue::GetTValue() {
-    return tvalue_;
+    return cs_.B_.CreateLoad(GetField(TAG), "tag");
 }
 
 llvm::Value* MutableValue::GetBoolean() {
@@ -89,7 +84,7 @@ llvm::Value* MutableValue::GetBoolean() {
 }
 
 llvm::Value* MutableValue::GetInteger() {
-    return cs_.B_.CreateLoad(GetField(VALUE), tvalue_->getName() + ".ivalue");
+    return cs_.B_.CreateLoad(GetField(VALUE), "ivalue");
 }
 
 llvm::Value* MutableValue::GetFloat() {
@@ -108,7 +103,7 @@ llvm::Value* MutableValue::GetGCValue() {
     return GetValue(cs_.rt_.GetType("GCObject"), "gcvalue");
 }
 
-void MutableValue::SetTag(int tag) {
+void MutableValue::SetTagK(int tag) {
     SetTag(cs_.MakeInt(tag));
 }
 
@@ -126,50 +121,67 @@ void MutableValue::Assign(Value& value) {
 }
 
 void MutableValue::SetBoolean(llvm::Value* bvalue) {
-    SetTag(LUA_TBOOLEAN);
+    SetTagK(LUA_TBOOLEAN);
     auto type = cs_.rt_.MakeIntT(sizeof(int));
     cs_.B_.CreateStore(bvalue, GetValuePtr(type, "bvalue"));
 }
 
-
 void MutableValue::SetInteger(llvm::Value* ivalue) {
-    SetTag(LUA_TNUMINT);
+    SetTagK(LUA_TNUMINT);
     cs_.B_.CreateStore(ivalue, GetField(VALUE));
 }
 
 void MutableValue::SetFloat(llvm::Value* fvalue) {
-    SetTag(LUA_TNUMFLT);
+    SetTagK(LUA_TNUMFLT);
     auto type = cs_.rt_.GetType("lua_Number");
     cs_.B_.CreateStore(fvalue, GetValuePtr(type, "nvalue"));
 }
 
 llvm::Value* MutableValue::GetField(Field field) {
     auto indices = {cs_.MakeInt(0), cs_.MakeInt((int)field)};
-    auto name = tvalue_->getName() + (field == VALUE ? ".value.ptr"
-                                                     : ".tag.ptr");
-    return cs_.B_.CreateGEP(tvalue_, indices, name);
+    auto name = field == VALUE ? "value.ptr" : "tag.ptr";
+    return cs_.B_.CreateGEP(GetTValue(), indices, name);
 }
 
 llvm::Value* MutableValue::GetValue(llvm::Type* type, const std::string& name) {
-    auto fullname = tvalue_->getName() + "." + name;
-    return cs_.B_.CreateLoad(GetValuePtr(type, name), fullname);
+    return cs_.B_.CreateLoad(GetValuePtr(type, name), name);
 }
 
 llvm::Value* MutableValue::GetValuePtr(llvm::Type* type,
         const std::string& name) {
-    auto fullname = tvalue_->getName() + "." + name + ".ptr";
     auto ptrtype = llvm::PointerType::get(type, 0);
-    return cs_.B_.CreateBitCast(GetField(VALUE), ptrtype, fullname);
+    return cs_.B_.CreateBitCast(GetField(VALUE), ptrtype, name + ".ptr");
 }
 
 Register::Register(CompilerState& cs, int arg) :
     MutableValue(cs),
-    arg_(arg) {
+    arg_(arg),
+    tvalue_(nullptr) {
 }
 
-void Register::Reload() {
+void Register::Init() {
+    auto ttvalue = cs_.rt_.GetType("TValue");
     auto name = "r" + std::to_string(arg_) + "_";
-    tvalue_ = cs_.B_.CreateGEP(cs_.GetBase(), cs_.MakeInt(arg_), name);
+    tvalue_ = cs_.B_.CreateAlloca(ttvalue, nullptr, name);
+    ReloadTValue();
+}
+
+void Register::ReloadTValue() {
+    auto tvalue = cs_.B_.CreateGEP(cs_.GetBase(), cs_.MakeInt(arg_));
+    cs_.B_.CreateStore(tvalue, tvalue_);
+}
+
+llvm::Value* Register::GetTValue() {
+    return cs_.B_.CreateLoad(tvalue_, tvalue_->getName() + "load");
+}
+
+RTRegister::RTRegister(CompilerState& cs, llvm::Value* tvalue) :
+    MutableValue(cs),
+    tvalue_(tvalue) {
+}
+
+llvm::Value* RTRegister::GetTValue() {
+    return tvalue_;
 }
 
 Upvalue::Upvalue(CompilerState& cs, int arg) :
@@ -178,7 +190,7 @@ Upvalue::Upvalue(CompilerState& cs, int arg) :
     upval_(nullptr) {
 }
 
-void Upvalue::Reload() {
+void Upvalue::ReloadTValue() {
     auto upvalptr = cs_.B_.CreateGEP(cs_.values_.upvals, cs_.MakeInt(arg_),
             "upval.ptr");
     upval_ = cs_.B_.CreateLoad(upvalptr, "upval");
@@ -190,7 +202,12 @@ llvm::Value* Upvalue::GetUpVal() {
     return upval_;
 }
 
-Stack::Stack(CompilerState& cs) {
+llvm::Value* Upvalue::GetTValue() {
+    return tvalue_;
+}
+
+Stack::Stack(CompilerState& cs) :
+    cs_(cs) {
     for (int i = 0; i < cs.proto_->sizek; ++i)
         k_.emplace_back(cs, i);
     for (int i = 0; i < cs.proto_->maxstacksize + 1; ++i)
@@ -215,17 +232,26 @@ Constant& Stack::GetK(int arg) {
 Register& Stack::GetR(int arg) {
     assert(arg >= 0);
     assert(arg < (int)r_.size());
-    auto& r = r_[arg];
-    r.Reload();
-    return r;
+    return r_[arg];
 }
 
 Upvalue& Stack::GetUp(int arg) {
     assert(arg >= 0);
     assert(arg < (int)u_.size());
     auto& u = u_[arg];
-    u.Reload();
+    u.ReloadTValue();
     return u;
+}
+
+void Stack::InitValues() {
+    for (auto& r : r_)
+        r.Init();
+}
+
+void Stack::Update() {
+    cs_.UpdateBase();
+    for (auto& r : r_)
+        r.ReloadTValue();
 }
 
 }

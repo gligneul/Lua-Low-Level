@@ -23,11 +23,12 @@ class Type;
 namespace lll {
 
 class CompilerState;
+class Stack;
 
 class Opcode {
 public:
     // Default contructor
-    Opcode(CompilerState& cs);
+    Opcode(CompilerState& cs, Stack& stack);
 
     // Compiles the opcode
     virtual void Compile() = 0;
@@ -42,6 +43,7 @@ protected:
             const std::string& name);
 
     CompilerState& cs_;
+    Stack& stack_;
     llvm::BasicBlock* entry_;
     llvm::BasicBlock* exit_;
 };

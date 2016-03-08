@@ -20,7 +20,7 @@ class Register;
 class Vararg : public Opcode {
 public:
     // Constructor
-    Vararg(CompilerState& cs);
+    Vararg(CompilerState& cs, Stack& stack);
 
     // Compiles the opcode
     void Compile();

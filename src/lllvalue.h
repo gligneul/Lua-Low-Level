@@ -78,11 +78,11 @@ private:
 class MutableValue : public Value {
 public:
     // Constructor
-    MutableValue(CompilerState& cs, llvm::Value* tvalue = nullptr);
+    MutableValue(CompilerState& cs);
 
     // Value Implementation
     virtual llvm::Value* GetTag();
-    virtual llvm::Value* GetTValue();
+    virtual llvm::Value* GetTValue() = 0;
     virtual llvm::Value* GetBoolean();
     virtual llvm::Value* GetInteger();
     virtual llvm::Value* GetFloat();
@@ -91,7 +91,7 @@ public:
     virtual llvm::Value* GetGCValue();
 
     // Manipulates the tag of the value
-    virtual void SetTag(int tag);
+    virtual void SetTagK(int tag);
     virtual void SetTag(llvm::Value* tag);
 
     // Sets the value field (must be lua_Integer)
@@ -120,8 +120,6 @@ protected:
 
     // Obtains the value and load it
     llvm::Value* GetValue(llvm::Type* type, const std::string& fieldname);
-
-    llvm::Value* tvalue_;
 };
 
 // Represents a register of lua stack
@@ -130,11 +128,31 @@ public:
     // Constructor
     Register(CompilerState& cs, int arg);
 
-    // Reloads the tvalue
-    void Reload();
+    // Initializes the values (create allocas)  
+    void Init();
+
+    // Reloads the tvalue, should be called after stack update
+    void ReloadTValue();
+
+    // Obtains the TValue
+    llvm::Value* GetTValue();
 
 private:
     int arg_;
+    llvm::Value* tvalue_;
+};
+
+// Represents a register that is only known at runtime
+class RTRegister : public MutableValue {
+public:
+    // Constructor
+    RTRegister(CompilerState& cs, llvm::Value* tvalue);
+
+    // Obtains the TValue
+    llvm::Value* GetTValue();
+
+private:
+    llvm::Value* tvalue_;
 };
 
 // Represents an upvalue
@@ -144,14 +162,18 @@ public:
     Upvalue(CompilerState& cs, int arg);
 
     // Reloads the tvalue
-    void Reload();
+    void ReloadTValue();
 
     // Obtains the pointer to UpVal structure
     llvm::Value* GetUpVal();
 
+    // Obtains the TValue
+    llvm::Value* GetTValue();
+
 private:
     int arg_;
     llvm::Value* upval_;
+    llvm::Value* tvalue_;
 };
 
 // Manages all values
@@ -172,7 +194,14 @@ public:
     // Obtains an upvalue
     Upvalue& GetUp(int arg);
 
+    // Initializes the values; should be called at the entry block
+    void InitValues();
+
+    // Updates the registers after a stack reallocation
+    void Update();
+
 private:
+    CompilerState& cs_;
     std::vector<Constant> k_;
     std::vector<Register> r_;
     std::vector<Upvalue> u_;

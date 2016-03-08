@@ -1,0 +1,74 @@
+Distro: CentOS release 6.6 (Final)
+Kernel: 2.6.32-504.30.3.el6.x86_64
+CPU:    Intel(R) Core(TM) i7-4770 CPU @ 3.40GHz
+
+Module: benchmarks/floatarith.lua
+             avg        stddev
+Lua:         0.78900	0.04602	(5.83263%)
+LLL:         0.30745	0.01156	(3.75841%)
+compilation: 0.00845	0.00060	(7.15746%)
+            0.379 time
+
+Module: benchmarks/heapsort.lua
+             avg        stddev
+Lua:         0.74425	0.04700	(6.31559%)
+LLL:         0.46030	0.02691	(5.84606%)
+compilation: 0.08345	0.00717	(8.59277%)
+            0.506 time
+
+Module: benchmarks/increment.lua
+             avg        stddev
+Lua:         0.78235	0.03644	(4.65730%)
+LLL:         0.21725	0.00112	(0.51463%)
+compilation: 0.00850	0.00083	(9.73141%)
+            0.267 time
+
+Module: benchmarks/loopsum.lua
+             avg        stddev
+Lua:         0.77490	0.01817	(2.34537%)
+LLL:         0.22670	0.01305	(5.75869%)
+compilation: 0.00930	0.00073	(7.87844%)
+            0.281 time
+
+Module: benchmarks/mandelbrot.lua
+             avg        stddev
+Lua:         1.01460	0.07069	(6.96714%)
+LLL:         0.62155	0.05098	(8.20164%)
+compilation: 0.08355	0.00790	(9.45207%)
+            0.530 time
+
+Module: benchmarks/matmul.lua
+             avg        stddev
+Lua:         0.72310	0.05092	(7.04231%)
+LLL:         0.42780	0.04282	(10.00902%)
+compilation: 0.07570	0.00134	(1.77231%)
+            0.487 time
+
+Module: benchmarks/qt.lua
+             avg        stddev
+Lua:         2.54995	0.18136	(7.11236%)
+LLL:         1.77630	0.05351	(3.01220%)
+compilation: 0.32980	0.01806	(5.47609%)
+            0.567 time
+
+Module: benchmarks/queen.lua
+             avg        stddev
+Lua:         0.49135	0.00898	(1.82785%)
+LLL:         0.28700	0.01211	(4.21922%)
+compilation: 0.04245	0.00394	(9.28153%)
+            0.498 time
+
+Module: benchmarks/sieve.lua
+             avg        stddev
+Lua:         1.31615	0.09323	(7.08328%)
+LLL:         0.68200	0.04803	(7.04278%)
+compilation: 0.03475	0.00137	(3.94736%)
+            0.492 time
+
+Module: benchmarks/sudoku.lua
+             avg        stddev
+Lua:         0.39810	0.01052	(2.64196%)
+LLL:         0.66785	0.00580	(0.86804%)
+compilation: 0.45595	0.00613	(1.34349%)
+            0.532 time
+

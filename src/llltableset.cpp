@@ -23,8 +23,9 @@ extern "C" {
 
 namespace lll {
 
-TableSet::TableSet(CompilerState& cs, Value& table, Value& key, Value& value) :
-    Opcode(cs),
+TableSet::TableSet(CompilerState& cs, Stack& stack, Value& table, Value& key,
+        Value& value) :
+    Opcode(cs, stack),
     table_(table),
     key_(key),
     value_(value),
@@ -129,7 +130,7 @@ void TableSet::CallGCBarrier() {
 
 void TableSet::FastSet() {
     cs_.B_.SetInsertPoint(fastset_);
-    MutableValue slot(cs_, slot_);
+    RTRegister slot(cs_, slot_);
     slot.Assign(value_);
     cs_.B_.CreateBr(exit_);
 }
@@ -137,15 +138,16 @@ void TableSet::FastSet() {
 void TableSet::FinishSet() {
     cs_.B_.SetInsertPoint(finishset_);
     auto ttvalue = cs_.rt_.GetType("TValue");
+    auto oldvalphi = CreatePHI(ttvalue, oldvals_, "oldval");
     auto args = {
         cs_.values_.state,
         table_.GetTValue(),
         key_.GetTValue(),
         value_.GetTValue(),
-        CreatePHI(ttvalue, oldvals_, "oldval")
+        oldvalphi
     };
     cs_.CreateCall("luaV_finishset", args);
-    cs_.UpdateStack();
+    stack_.Update();
     cs_.B_.CreateBr(exit_);
 }
 

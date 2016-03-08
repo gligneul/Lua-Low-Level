@@ -16,7 +16,6 @@
 namespace lll {
 
 class Register;
-class Stack;
 class Value;
 
 class Arith : public Opcode {

@@ -77,6 +77,10 @@ Engine* Compiler::GetEngine() {
 }
 
 bool Compiler::CompileInstructions() {
+    cs_.InitEntryBlock();
+    stack_.InitValues();
+    cs_.B_.CreateBr(cs_.blocks_[0]);
+
     for (cs_.curr_ = 0; cs_.curr_ < cs_.proto_->sizecode; ++cs_.curr_) {
         cs_.B_.SetInsertPoint(cs_.blocks_[cs_.curr_]);
         cs_.instr_ = cs_.proto_->code[cs_.curr_];
@@ -120,7 +124,7 @@ bool Compiler::CompileInstructions() {
             case OP_TFORLOOP: CompileTforloop(); break;
             case OP_SETLIST:  CompileSetlist(); break;
             case OP_CLOSURE:  CompileClosure(); break;
-            case OP_VARARG:   Vararg(cs_).Compile(); break;
+            case OP_VARARG:   Vararg(cs_, stack_).Compile(); break;
             case OP_EXTRAARG: /* ignored */ break;
         }
         if (!cs_.blocks_[cs_.curr_]->getTerminator())
@@ -134,8 +138,6 @@ bool Compiler::VerifyModule() {
     bool err = llvm::verifyModule(*cs_.module_, &error_os);
     if (err) {
         cs_.module_->dump();
-        printf("TRETA %s\n", error_.c_str());
-        exit(1);
     }
     return !err;
 }
@@ -143,6 +145,9 @@ bool Compiler::VerifyModule() {
 bool Compiler::OptimizeModule() {
     llvm::FunctionPassManager fpm(cs_.module_.get());
     fpm.add(llvm::createPromoteMemoryToRegisterPass());
+    fpm.add(llvm::createGVNPass()); // required by SCCP Pass
+    fpm.add(llvm::createSCCPPass());
+    fpm.add(llvm::createAggressiveDCEPass());
     fpm.run(*cs_.function_);
     return true;
 }
@@ -195,7 +200,7 @@ void Compiler::CompileLoadnil() {
     int end = start + GETARG_B(cs_.instr_);
     for (int i = start; i <= end; ++i) {
         auto& r = stack_.GetR(i);
-        r.SetTag(LUA_TNIL);
+        r.SetTagK(LUA_TNIL);
     }
 }
 
@@ -209,21 +214,21 @@ void Compiler::CompileGettabup() {
     auto& table = stack_.GetUp(GETARG_B(cs_.instr_));
     auto& key = stack_.GetRK(GETARG_C(cs_.instr_));
     auto& dest = stack_.GetR(GETARG_A(cs_.instr_));
-    TableGet(cs_, table, key, dest).Compile();
+    TableGet(cs_, stack_, table, key, dest).Compile();
 }
 
 void Compiler::CompileGettable() {
     auto& table = stack_.GetR(GETARG_B(cs_.instr_));
     auto& key = stack_.GetRK(GETARG_C(cs_.instr_));
     auto& dest = stack_.GetR(GETARG_A(cs_.instr_));
-    TableGet(cs_, table, key, dest).Compile();
+    TableGet(cs_, stack_, table, key, dest).Compile();
 }
 
 void Compiler::CompileSettabup() {
     auto& table = stack_.GetUp(GETARG_A(cs_.instr_));
     auto& key = stack_.GetRK(GETARG_B(cs_.instr_));
     auto& value = stack_.GetRK(GETARG_C(cs_.instr_));
-    TableSet(cs_, table, key, value).Compile();
+    TableSet(cs_, stack_, table, key, value).Compile();
 }
 
 void Compiler::CompileSetupval() {
@@ -237,7 +242,7 @@ void Compiler::CompileSettable() {
     auto& table = stack_.GetR(GETARG_A(cs_.instr_));
     auto& key = stack_.GetRK(GETARG_B(cs_.instr_));
     auto& value = stack_.GetRK(GETARG_C(cs_.instr_));
-    TableSet(cs_, table, key, value).Compile();
+    TableSet(cs_, stack_, table, key, value).Compile();
 }
 
 void Compiler::CompileNewtable() {
@@ -266,7 +271,7 @@ void Compiler::CompileSelf() {
     auto& methodslot = stack_.GetR(GETARG_A(cs_.instr_));
     auto& selfslot = stack_.GetR(GETARG_A(cs_.instr_) + 1);
     selfslot.Assign(table);
-    TableGet(cs_, table, key, methodslot).Compile();
+    TableGet(cs_, stack_, table, key, methodslot).Compile();
 }
 
 void Compiler::CompileUnop(const std::string& function) {
@@ -274,7 +279,7 @@ void Compiler::CompileUnop(const std::string& function) {
     auto& rkb = stack_.GetRK(GETARG_B(cs_.instr_));
     auto args = {cs_.values_.state, ra.GetTValue(), rkb.GetTValue()};
     cs_.CreateCall(function, args);
-    cs_.UpdateStack();
+    stack_.Update();
 }
 
 void Compiler::CompileConcat() {
@@ -285,7 +290,7 @@ void Compiler::CompileConcat() {
     cs_.SetTop(c + 1);
     auto args = {cs_.values_.state, cs_.MakeInt(c - b + 1)};
     cs_.CreateCall("luaV_concat", args);
-    cs_.UpdateStack();
+    stack_.Update();
 
     auto& ra = stack_.GetR(a);
     auto& rb = stack_.GetR(b);
@@ -315,7 +320,7 @@ void Compiler::CompileCmp(const std::string& function) {
     auto& rkc = stack_.GetRK(GETARG_C(cs_.instr_));
     auto args = {cs_.values_.state, rkb.GetTValue(), rkc.GetTValue()};
     auto result = cs_.CreateCall(function, args, "result");
-    cs_.UpdateStack();
+    stack_.Update();
 
     auto a = cs_.MakeInt(GETARG_A(cs_.instr_));
     auto cmp = cs_.B_.CreateICmpNE(result, a, "cmp");
@@ -409,7 +414,7 @@ void Compiler::CompileCall() {
         cs_.MakeInt(GETARG_C(cs_.instr_) - 1)
     };
     cs_.CreateCall("luaD_callnoyield", args);
-    cs_.UpdateStack();
+    stack_.Update();
 }
 
 void Compiler::CompileTailcall() {
@@ -471,7 +476,7 @@ void Compiler::CompileTforcall() {
         cs_.MakeInt(GETARG_C(cs_.instr_))
     };
     cs_.CreateCall("luaD_callnoyield", args);
-    cs_.UpdateStack();
+    stack_.Update();
     cs_.ReloadTop();
 }
 

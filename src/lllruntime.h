@@ -34,7 +34,7 @@ public:
     llvm::Function* GetFunction(llvm::Module* module, const std::string& name);
 
     // Makes a llvm int type
-    llvm::Type* MakeIntT(int nbytes);
+    llvm::Type* MakeIntT(int nbytes = sizeof(int));
 
 private:
     Runtime();
