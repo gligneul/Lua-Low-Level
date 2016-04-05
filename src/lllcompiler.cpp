@@ -144,8 +144,8 @@ bool Compiler::VerifyModule() {
 
 bool Compiler::OptimizeModule() {
     llvm::FunctionPassManager fpm(cs_.module_.get());
-    fpm.add(llvm::createPromoteMemoryToRegisterPass());
     fpm.add(llvm::createGVNPass()); // required by SCCP Pass
+    fpm.add(llvm::createPromoteMemoryToRegisterPass());
     fpm.add(llvm::createSCCPPass());
     fpm.add(llvm::createAggressiveDCEPass());
     fpm.run(*cs_.function_);

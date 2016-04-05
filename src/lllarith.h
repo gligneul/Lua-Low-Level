@@ -28,7 +28,8 @@ public:
 
 private:
     // Compilation steps
-    void SwitchTags();
+    void CheckXTag();
+    void CheckYTag();
     void ComputeInt();
     void ComputeFloat();
     void ComputeTaggedMethod();
@@ -36,22 +37,9 @@ private:
     // Returns whether the opcode can perform an integer operation
     bool HasIntegerOp();
 
-    // Go to the target block depending on the tag:
-    // if istagint
-    //   goto intop
-    // elseif istagfloat
-    //   goto floatop
-    // elseif tonumber
-    //   goto convop
-    // else
-    //   goto tmop
-    void SwitchTagCase(Value& value, llvm::Value* tag, llvm::Value* convptr,
-            llvm::BasicBlock* entry, llvm::BasicBlock* intop,
-            llvm::BasicBlock* floatop, llvm::BasicBlock* convop, bool intfirst);
-
     // Performs the integer/float binary operation
-    llvm::Value* PerformIntOp(llvm::Value* a, llvm::Value* b);
-    llvm::Value* PerformFloatOp(llvm::Value* a, llvm::Value* b);
+    llvm::Value* PerformIntOp(llvm::Value* lhs, llvm::Value* rhs);
+    llvm::Value* PerformFloatOp(llvm::Value* lhs, llvm::Value* rhs);
     
     // Obtains the corresponding tag for the opcode
     int GetMethodTag();
@@ -59,11 +47,16 @@ private:
     Register& ra_;
     Value& rkb_;
     Value& rkc_;
+    Value& x_;
+    Value& y_;
+    llvm::BasicBlock* check_y_;
     llvm::BasicBlock* intop_;
     llvm::BasicBlock* floatop_;
     llvm::BasicBlock* tmop_;
-    IncomingList nbinc_;
-    IncomingList ncinc_;
+    llvm::Value* x_int_;
+    llvm::Value* x_float_;
+    IncomingList x_float_inc_;
+    IncomingList y_float_inc_;
 };
 
 }

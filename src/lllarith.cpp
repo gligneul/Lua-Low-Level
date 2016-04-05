@@ -26,79 +26,86 @@ Arith::Arith(CompilerState& cs, Stack& stack) :
     ra_(stack.GetR(GETARG_A(cs.instr_))),
     rkb_(stack.GetRK(GETARG_B(cs.instr_))),
     rkc_(stack.GetRK(GETARG_C(cs.instr_))),
-    intop_(cs.CreateSubBlock("intop")),
+    x_(rkb_),
+    y_(rkc_),
+    check_y_(cs.CreateSubBlock("check_y")),
+    intop_(cs.CreateSubBlock("intop", check_y_)),
     floatop_(cs.CreateSubBlock("floatop", intop_)),
-    tmop_(cs.CreateSubBlock("tmop", floatop_)) {
+    tmop_(cs.CreateSubBlock("tmop", floatop_)),
+    x_int_(nullptr),
+    x_float_(nullptr) {
 }
 
 void Arith::Compile() {
-    SwitchTags();
+    CheckXTag();
+    CheckYTag();
     ComputeInt();
     ComputeFloat();
     ComputeTaggedMethod();
 }
 
-void Arith::SwitchTags() {
-    // Creates a bblock for each possible combination of tags
-    auto bint = cs_.CreateSubBlock("bint");
-    auto bflt = cs_.CreateSubBlock("bflt", bint);
-    auto bstr = cs_.CreateSubBlock("bstr", bflt);
-    auto bint_cflt = cs_.CreateSubBlock("bint_cflt", bstr);
-    auto bint_cstr = cs_.CreateSubBlock("bint_cstr", bint_cflt);
-    auto bflt_cint = cs_.CreateSubBlock("bflt_cint", bint_cstr);
-    auto bflt_cflt = cs_.CreateSubBlock("bflt_cflt", bflt_cint);
-    auto bflt_cstr = cs_.CreateSubBlock("bflt_cstr", bflt_cflt);
-    auto bstr_cint = cs_.CreateSubBlock("bstr_cint", bflt_cstr);
-    auto bstr_cflt = cs_.CreateSubBlock("bstr_cflt", bstr_cint);
-    auto bstr_cstr = cs_.CreateSubBlock("bstr_cstr", bstr_cflt);
+void Arith::CheckXTag() {
+    auto check_y_int = cs_.CreateSubBlock("is_y_int");
+    auto check_x_float = cs_.CreateSubBlock("is_x_float", check_y_int);
+    auto tonumber_x = cs_.CreateSubBlock("tonumber_x", check_x_float);
 
-    // Operands information
     cs_.B_.SetInsertPoint(entry_);
-    auto btag = rkb_.GetTag();
-    auto ctag = rkc_.GetTag();
-    auto bnumber = cs_.values_.bnumber;
-    auto cnumber = cs_.values_.cnumber;
+    auto xtag = x_.GetTag();
+    auto is_x_int = cs_.B_.CreateICmpEQ(xtag, cs_.MakeInt(LUA_TNUMINT));
+    cs_.B_.CreateCondBr(is_x_int, check_y_int, check_x_float);
 
-    // Make the switches
-    SwitchTagCase(rkb_, btag, bnumber, entry_, bint, bflt, bstr, true);
-    SwitchTagCase(rkc_, ctag, cnumber, bint, intop_, bint_cflt, bint_cstr,
-            true);
-    SwitchTagCase(rkc_, ctag, cnumber, bflt, bflt_cint, bflt_cflt, bflt_cstr,
-            false);
-    SwitchTagCase(rkc_, ctag, cnumber, bstr, bstr_cint, bstr_cflt, bstr_cstr,
-            false);
-
-    // Set nb and nc incomings
+    cs_.B_.SetInsertPoint(check_y_int);
+    x_int_ = x_.GetInteger();
     auto floatt = cs_.rt_.GetType("lua_Number");
-    #define ITOF(v) \
-        cs_.B_.CreateSIToFP(v, floatt, v->getName() + "_flt")
+    auto x_itof = cs_.B_.CreateSIToFP(x_int_, floatt, x_int_->getName() + "_flt");
+    x_float_inc_.push_back({x_itof, check_y_int});
+    auto is_y_int = y_.HasTag(LUA_TNUMINT);
+    cs_.B_.CreateCondBr(is_y_int, intop_, check_y_);
 
-    #define LOAD(v) \
-        cs_.B_.CreateLoad(v, v->getName() + "_loaded")
+    cs_.B_.SetInsertPoint(check_x_float);
+    x_float_inc_.push_back({x_.GetFloat(), check_x_float});
+    auto is_x_float = cs_.B_.CreateICmpEQ(xtag, cs_.MakeInt(LUA_TNUMFLT));
+    cs_.B_.CreateCondBr(is_x_float, check_y_, tonumber_x);
 
-    #define SET_INCOMING(block, bvalue, cvalue) { \
-        cs_.B_.SetInsertPoint(block); \
-        nbinc_.push_back({(bvalue), (block)}); \
-        ncinc_.push_back({(cvalue), (block)}); \
-        cs_.B_.CreateBr(floatop_); }
+    cs_.B_.SetInsertPoint(tonumber_x);
+    auto args = {x_.GetTValue(), cs_.values_.xnumber};
+    auto tonumberret = cs_.CreateCall("luaV_tonumber_", args);
+    auto x_converted = cs_.B_.CreateLoad(cs_.values_.xnumber);
+    x_float_inc_.push_back({x_converted, tonumber_x});
+    auto converted = cs_.ToBool(tonumberret);
+    cs_.B_.CreateCondBr(converted, check_y_, tmop_);
+}
 
-    if (!HasIntegerOp()) {
-        SET_INCOMING(intop_, ITOF(rkb_.GetInteger()), ITOF(rkc_.GetInteger()));
-    }
-    SET_INCOMING(bint_cflt, ITOF(rkb_.GetInteger()), rkc_.GetFloat());
-    SET_INCOMING(bint_cstr, ITOF(rkb_.GetInteger()), LOAD(cnumber));
-    SET_INCOMING(bflt_cint, rkb_.GetFloat(), ITOF(rkc_.GetInteger()));
-    SET_INCOMING(bflt_cflt, rkb_.GetFloat(), rkc_.GetFloat());
-    SET_INCOMING(bflt_cstr, rkb_.GetFloat(), LOAD(cnumber));
-    SET_INCOMING(bstr_cint, LOAD(bnumber), ITOF(rkc_.GetInteger()));
-    SET_INCOMING(bstr_cflt, LOAD(bnumber), rkc_.GetFloat());
-    SET_INCOMING(bstr_cstr, LOAD(bnumber), LOAD(cnumber));
+void Arith::CheckYTag() {
+    auto tonumber_y = cs_.CreateSubBlock("tonumber_y", check_y_);
+
+    cs_.B_.SetInsertPoint(check_y_);
+    auto floatt = cs_.rt_.GetType("lua_Number");
+    x_float_ = CreatePHI(floatt, x_float_inc_, "xfloat");
+    y_float_inc_.push_back({y_.GetFloat(), check_y_});
+    auto is_y_float = y_.HasTag(LUA_TNUMFLT);
+    cs_.B_.CreateCondBr(is_y_float, floatop_, tonumber_y);
+
+    cs_.B_.SetInsertPoint(tonumber_y);
+    auto args = {y_.GetTValue(), cs_.values_.ynumber};
+    auto tonumberret = cs_.CreateCall("luaV_tonumber_", args);
+    auto y_converted = cs_.B_.CreateLoad(cs_.values_.ynumber);
+    y_float_inc_.push_back({y_converted, tonumber_y});
+    auto converted = cs_.ToBool(tonumberret);
+    cs_.B_.CreateCondBr(converted, floatop_, tmop_);
 }
 
 void Arith::ComputeInt() {
+    cs_.B_.SetInsertPoint(intop_);
+    auto y_int = y_.GetInteger();
     if (HasIntegerOp()) {
-        cs_.B_.SetInsertPoint(intop_);
-        ra_.SetInteger(PerformIntOp(rkb_.GetInteger(), rkc_.GetInteger()));
+        ra_.SetInteger(PerformIntOp(x_int_, y_int));
+        cs_.B_.CreateBr(exit_);
+    } else {
+        auto floatt = cs_.rt_.GetType("lua_Number");
+        auto x_float = cs_.B_.CreateSIToFP(x_int_, floatt);
+        auto y_float = cs_.B_.CreateSIToFP(y_int, floatt);
+        ra_.SetFloat(PerformFloatOp(x_float, y_float));
         cs_.B_.CreateBr(exit_);
     }
 }
@@ -106,9 +113,8 @@ void Arith::ComputeInt() {
 void Arith::ComputeFloat() {
     cs_.B_.SetInsertPoint(floatop_);
     auto floatt = cs_.rt_.GetType("lua_Number");
-    auto nb = CreatePHI(floatt, nbinc_, "nb");
-    auto nc = CreatePHI(floatt, ncinc_, "nc");
-    ra_.SetFloat(PerformFloatOp(nb, nc));
+    auto y_float = CreatePHI(floatt, y_float_inc_, "yfloat");
+    ra_.SetFloat(PerformFloatOp(x_float_, y_float));
     cs_.B_.CreateBr(exit_);
 }
 
@@ -116,8 +122,8 @@ void Arith::ComputeTaggedMethod() {
     cs_.B_.SetInsertPoint(tmop_);
     auto args = {
         cs_.values_.state,
-        rkb_.GetTValue(),
-        rkc_.GetTValue(),
+        x_.GetTValue(),
+        y_.GetTValue(),
         ra_.GetTValue(),
         cs_.MakeInt(GetMethodTag())
     };
@@ -134,31 +140,6 @@ bool Arith::HasIntegerOp() {
             break;
     }
     return false;
-}
-
-void Arith::SwitchTagCase(Value& value, llvm::Value* tag, llvm::Value* convptr,
-        llvm::BasicBlock* entry, llvm::BasicBlock* intop,
-        llvm::BasicBlock* floatop, llvm::BasicBlock* convop, bool intfirst) {
-    auto checkothertag = cs_.CreateSubBlock("checkothertag", entry);
-    auto convert = cs_.CreateSubBlock("convert", checkothertag);
-
-    auto firsttag = cs_.MakeInt(intfirst ? LUA_TNUMINT : LUA_TNUMFLT);
-    auto secondtag = cs_.MakeInt(intfirst ? LUA_TNUMFLT : LUA_TNUMINT);
-    auto firstop = intfirst ? intop : floatop;
-    auto secondop = intfirst ? floatop : intop;
-
-    cs_.B_.SetInsertPoint(entry);
-    auto hasfirsttag = cs_.B_.CreateICmpEQ(tag, firsttag);
-    cs_.B_.CreateCondBr(hasfirsttag, firstop, checkothertag);
-
-    cs_.B_.SetInsertPoint(checkothertag);
-    auto hassecondtag = cs_.B_.CreateICmpEQ(tag, secondtag);
-    cs_.B_.CreateCondBr(hassecondtag, secondop, convert);
-
-    cs_.B_.SetInsertPoint(convert);
-    auto args = {value.GetTValue(), convptr};
-    auto converted = cs_.CreateCall("LLLToNumber", args, "converted");
-    cs_.B_.CreateCondBr(converted, convop, tmop_);
 }
 
 llvm::Value* Arith::PerformIntOp(llvm::Value* lhs, llvm::Value* rhs) {

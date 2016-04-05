@@ -399,6 +399,7 @@ void Runtime::InitFunctions() {
     ADDFUNCTION(luaT_trybinTM, tvoid, tstate, ttvalue, ttvalue, ttvalue, tint);
 
     // lvm.h
+    ADDFUNCTION(luaV_tonumber_, tint, ttvalue, tluanumberptr);
     ADDFUNCTION(luaV_concat, tvoid, tstate, tint);
     ADDFUNCTION(luaV_div, tluainteger, tstate, tluainteger, tluainteger);
     ADDFUNCTION(luaV_equalobj, tint, tstate, ttvalue, ttvalue);

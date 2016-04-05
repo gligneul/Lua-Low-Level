@@ -69,8 +69,8 @@ void CompilerState::InitEntryBlock() {
             offsetof(LClosure, upvals), "closure.upvals");
 
     auto tluanumber = rt_.GetType("lua_Number");
-    values_.bnumber = B_.CreateAlloca(tluanumber, nullptr, "bnumber");
-    values_.cnumber = B_.CreateAlloca(tluanumber, nullptr, "cnumber");
+    values_.xnumber = B_.CreateAlloca(tluanumber, nullptr, "xnumber");
+    values_.ynumber = B_.CreateAlloca(tluanumber, nullptr, "ynumber");
 
     auto ttvalue = rt_.GetType("TValue");
     values_.base = B_.CreateAlloca(ttvalue, nullptr, "base");

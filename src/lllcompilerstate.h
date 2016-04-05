@@ -111,8 +111,8 @@ public:
         llvm::Value* ci;
         llvm::Value* upvals;
         llvm::Value* base;
-        llvm::Value* bnumber;
-        llvm::Value* cnumber;
+        llvm::Value* xnumber;
+        llvm::Value* ynumber;
     } values_;
     int curr_;
     Instruction instr_;
