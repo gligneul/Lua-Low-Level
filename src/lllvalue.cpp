@@ -112,7 +112,10 @@ void MutableValue::SetTag(llvm::Value* tag) {
 }
 
 void MutableValue::SetValue(llvm::Value* value) {
-    cs_.B_.CreateStore(value, GetField(VALUE));
+    auto field = GetField(VALUE);
+    auto ptrtype = llvm::PointerType::get(value->getType(), 0);
+    auto tfield = cs_.B_.CreateBitCast(field, ptrtype);
+    cs_.B_.CreateStore(value, tfield);
 }
 
 void MutableValue::Assign(Value& value) {

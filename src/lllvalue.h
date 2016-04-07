@@ -94,7 +94,7 @@ public:
     virtual void SetTagK(int tag);
     virtual void SetTag(llvm::Value* tag);
 
-    // Sets the value field (must be lua_Integer)
+    // Sets the value field
     virtual void SetValue(llvm::Value* value);
 
     // Copy the contents of $value to this

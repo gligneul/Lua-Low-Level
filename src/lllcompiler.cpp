@@ -332,8 +332,7 @@ void Compiler::CompileUnm() {
     cs_.B_.CreateBr(exit);
 }
 
-void Compiler::CompileBNot()
-{
+void Compiler::CompileBNot() {
     auto entry = cs_.blocks_[cs_.curr_];
     auto convert = cs_.CreateSubBlock("convert", entry);
     auto intop = cs_.CreateSubBlock("intop", convert);
@@ -380,8 +379,7 @@ void Compiler::CompileBNot()
     cs_.B_.CreateBr(exit);
 }
 
-void Compiler::CompileNot()
-{
+void Compiler::CompileNot() {
     auto entry = cs_.blocks_[cs_.curr_];
     auto checkbool = cs_.CreateSubBlock("checkbool", entry);
     auto assign_by_bool = cs_.CreateSubBlock("assignbool", checkbool);
@@ -589,11 +587,55 @@ void Compiler::CompileReturn() {
 }
 
 void Compiler::CompileForloop() {
-    auto& ra = stack_.GetR(GETARG_A(cs_.instr_));
-    auto args = {ra.GetTValue()};
-    auto jump = cs_.ToBool(cs_.CreateCall("lll_forloop", args, "jump"));
+    auto entry = cs_.blocks_[cs_.curr_];
+    auto intcheck = cs_.CreateSubBlock("intcheck", entry);
+    auto intgoback = cs_.CreateSubBlock("intgoback", intcheck);
+    auto floatcheck = cs_.CreateSubBlock("floatcheck", intgoback);
+    auto floatgoback = cs_.CreateSubBlock("floatgoback", floatcheck);
+    auto exit = cs_.blocks_[cs_.curr_ + 1];
     auto jumpblock = cs_.blocks_[cs_.curr_ + 1 + GETARG_sBx(cs_.instr_)];
-    cs_.B_.CreateCondBr(jump, jumpblock, cs_.blocks_[cs_.curr_ + 1]);
+
+    cs_.B_.SetInsertPoint(entry);
+    auto& ra = stack_.GetR(GETARG_A(cs_.instr_));
+    auto& ra1 = stack_.GetR(GETARG_A(cs_.instr_) + 1);
+    auto& ra2 = stack_.GetR(GETARG_A(cs_.instr_) + 2);
+    auto& ra3 = stack_.GetR(GETARG_A(cs_.instr_) + 3);
+    auto a_is_int = ra.HasTag(LUA_TNUMINT);
+    cs_.B_.CreateCondBr(a_is_int, intcheck, floatcheck);
+
+    cs_.B_.SetInsertPoint(intcheck); {
+    auto step = ra2.GetInteger();
+    auto oldidx = ra.GetInteger();
+    auto idx = cs_.B_.CreateAdd(oldidx, step);
+    auto limit = ra1.GetInteger();
+    auto idx_le_limit = cs_.B_.CreateICmpSLE(idx, limit);
+    auto limit_le_idx = cs_.B_.CreateICmpSLE(limit, idx);
+    auto zero = cs_.MakeInt(0, step->getType());
+    auto step_ltz = cs_.B_.CreateICmpSLE(step, zero);
+    auto condition = cs_.B_.CreateSelect(step_ltz, limit_le_idx, idx_le_limit);
+    cs_.B_.CreateCondBr(condition, intgoback, exit);
+
+    cs_.B_.SetInsertPoint(intgoback);
+    ra.SetValue(idx);
+    ra3.SetInteger(idx);
+    cs_.B_.CreateBr(jumpblock); }
+
+    cs_.B_.SetInsertPoint(floatcheck); {
+    auto step = ra2.GetFloat();
+    auto oldidx = ra.GetFloat();
+    auto idx = cs_.B_.CreateFAdd(oldidx, step);
+    auto limit = ra1.GetFloat();
+    auto idx_le_limit = cs_.B_.CreateFCmpOLE(idx, limit);
+    auto limit_le_idx = cs_.B_.CreateFCmpOLE(limit, idx);
+    auto zero = llvm::ConstantFP::get(step->getType(), 0.0);
+    auto step_ltz = cs_.B_.CreateFCmpOLE(step, zero);
+    auto condition = cs_.B_.CreateSelect(step_ltz, limit_le_idx, idx_le_limit);
+    cs_.B_.CreateCondBr(condition, floatgoback, exit);
+
+    cs_.B_.SetInsertPoint(floatgoback);
+    ra.SetValue(idx);
+    ra3.SetFloat(idx);
+    cs_.B_.CreateBr(jumpblock); }
 }
 
 void Compiler::CompileForprep() {
