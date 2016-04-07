@@ -99,15 +99,18 @@ bool Compiler::CompileInstructions() {
             case OP_SETTABLE: CompileSettable(); break;
             case OP_NEWTABLE: CompileNewtable(); break;
             case OP_SELF:     CompileSelf(); break;
+
             case OP_ADD: case OP_SUB: case OP_MUL: case OP_MOD: case OP_POW:  
             case OP_DIV: case OP_IDIV:
                               Arith(cs_, stack_).Compile(); break;
+
             case OP_BAND: case OP_BOR: case OP_BXOR: case OP_SHL: case OP_SHR:
                               Logical(cs_, stack_).Compile(); break;
-            case OP_UNM:      CompileUnop("lll_unm"); break;
-            case OP_BNOT:     CompileUnop("lll_bnot"); break;
-            case OP_NOT:      CompileUnop("lll_not"); break;
-            case OP_LEN:      CompileUnop("luaV_objlen"); break;
+
+            case OP_UNM:      CompileUnm(); break;
+            case OP_BNOT:     CompileBNot(); break;
+            case OP_NOT:      CompileNot(); break;
+            case OP_LEN:      CompileLen(); break;
             case OP_CONCAT:   CompileConcat(); break;
             case OP_JMP:      CompileJmp(); break;
             case OP_EQ:       CompileCmp("luaV_equalobj"); break;
@@ -274,11 +277,149 @@ void Compiler::CompileSelf() {
     TableGet(cs_, stack_, table, key, methodslot).Compile();
 }
 
-void Compiler::CompileUnop(const std::string& function) {
+void Compiler::CompileUnm() {
+    auto entry = cs_.blocks_[cs_.curr_];
+    auto checkfloat = cs_.CreateSubBlock("isfloat", entry);
+    auto convert = cs_.CreateSubBlock("convert", checkfloat);
+    auto intop = cs_.CreateSubBlock("intop", convert);
+    auto floatop = cs_.CreateSubBlock("floatop", intop);
+    auto tmop = cs_.CreateSubBlock("tmop", floatop);
+    auto exit = cs_.blocks_[cs_.curr_ + 1];
+
+    cs_.B_.SetInsertPoint(entry);
+    auto& ra = stack_.GetR(GETARG_A(cs_.instr_));
+    auto& rb = stack_.GetR(GETARG_B(cs_.instr_));
+    auto tag = rb.GetTag();
+    auto isint = cs_.B_.CreateICmpEQ(tag, cs_.MakeInt(LUA_TNUMINT));
+    cs_.B_.CreateCondBr(isint, intop, checkfloat);
+
+    cs_.B_.SetInsertPoint(checkfloat);
+    auto floatval = rb.GetFloat();
+    auto isfloat = cs_.B_.CreateICmpEQ(tag, cs_.MakeInt(LUA_TNUMFLT));
+    cs_.B_.CreateCondBr(isfloat, floatop, convert);
+
+    cs_.B_.SetInsertPoint(convert);
+    auto args = {rb.GetTValue(), cs_.values_.xnumber};
+    auto tonumberret = cs_.CreateCall("luaV_tonumber_", args);
+    auto convertedval = cs_.B_.CreateLoad(cs_.values_.xnumber);
+    auto convok = cs_.ToBool(tonumberret);
+    cs_.B_.CreateCondBr(convok, floatop, tmop);
+
+    cs_.B_.SetInsertPoint(intop);
+    auto intresult = cs_.B_.CreateNeg(rb.GetInteger(), "intresult");
+    ra.SetInteger(intresult);
+    cs_.B_.CreateBr(exit);
+
+    cs_.B_.SetInsertPoint(floatop);
+    auto floatt = cs_.rt_.GetType("lua_Number");
+    auto floatphi = cs_.B_.CreatePHI(floatt, 2, "floatphi");
+    floatphi->addIncoming(floatval, checkfloat);
+    floatphi->addIncoming(convertedval, convert);
+    auto floatresult = cs_.B_.CreateFNeg(floatphi, "floatresult");
+    ra.SetFloat(floatresult);
+    cs_.B_.CreateBr(exit);
+
+    cs_.B_.SetInsertPoint(tmop);
+    auto tm_args = {
+        cs_.values_.state,
+        rb.GetTValue(),
+        rb.GetTValue(),
+        ra.GetTValue(),
+        cs_.MakeInt(TM_UNM)
+    };
+    cs_.CreateCall("luaT_trybinTM", tm_args);
+    stack_.Update();
+    cs_.B_.CreateBr(exit);
+}
+
+void Compiler::CompileBNot()
+{
+    auto entry = cs_.blocks_[cs_.curr_];
+    auto convert = cs_.CreateSubBlock("convert", entry);
+    auto intop = cs_.CreateSubBlock("intop", convert);
+    auto tmop = cs_.CreateSubBlock("tmtop", intop);
+    auto exit = cs_.blocks_[cs_.curr_ + 1];
+
+    cs_.B_.SetInsertPoint(entry);
+    auto& ra = stack_.GetR(GETARG_A(cs_.instr_));
+    auto& rb = stack_.GetR(GETARG_B(cs_.instr_));
+    auto b_int = rb.GetInteger();
+    auto b_is_int = rb.HasTag(LUA_TNUMINT);
+    cs_.B_.CreateCondBr(b_is_int, intop, convert);
+
+    cs_.B_.SetInsertPoint(convert);
+    auto args = {
+        rb.GetTValue(),
+        cs_.values_.meminteger,
+        cs_.MakeInt(LUA_FLOORN2I)
+    };
+    auto convresult = cs_.CreateCall("luaV_tointeger", args);
+    auto b_conv = cs_.B_.CreateLoad(cs_.values_.meminteger);
+    auto b_is_conv = cs_.ToBool(convresult);
+    cs_.B_.CreateCondBr(b_is_conv, intop, tmop);
+
+    cs_.B_.SetInsertPoint(intop);
+    auto tluainteger = cs_.rt_.GetType("lua_Integer");
+    auto b_val = cs_.B_.CreatePHI(tluainteger, 2);
+    b_val->addIncoming(b_int, entry);
+    b_val->addIncoming(b_conv, convert);
+    auto a_val = cs_.B_.CreateNot(b_val);
+    ra.SetInteger(a_val);
+    cs_.B_.CreateBr(exit);
+
+    cs_.B_.SetInsertPoint(tmop);
+    auto tm_args = {
+        cs_.values_.state,
+        rb.GetTValue(),
+        rb.GetTValue(),
+        ra.GetTValue(),
+        cs_.MakeInt(TM_BNOT)
+    };
+    cs_.CreateCall("luaT_trybinTM", tm_args);
+    stack_.Update();
+    cs_.B_.CreateBr(exit);
+}
+
+void Compiler::CompileNot()
+{
+    auto entry = cs_.blocks_[cs_.curr_];
+    auto checkbool = cs_.CreateSubBlock("checkbool", entry);
+    auto assign_by_bool = cs_.CreateSubBlock("assignbool", checkbool);
+    auto assign_by_tag = cs_.CreateSubBlock("assignbytag", assign_by_bool);
+    auto exit = cs_.blocks_[cs_.curr_ + 1];
+
+    cs_.B_.SetInsertPoint(entry);
+    auto& ra = stack_.GetR(GETARG_A(cs_.instr_));
+    auto& rb = stack_.GetR(GETARG_B(cs_.instr_));
+    auto btag = rb.GetTag();
+    auto b_is_nil = cs_.B_.CreateICmpEQ(btag, cs_.MakeInt(LUA_TNIL));
+    cs_.B_.CreateCondBr(b_is_nil, assign_by_tag, checkbool);
+
+    cs_.B_.SetInsertPoint(checkbool);
+    auto b_is_bool = cs_.B_.CreateICmpEQ(btag, cs_.MakeInt(LUA_TBOOLEAN));
+    cs_.B_.CreateCondBr(b_is_bool, assign_by_bool, assign_by_tag);
+
+    cs_.B_.SetInsertPoint(assign_by_tag);
+    auto intt = cs_.rt_.MakeIntT();
+    auto val = cs_.B_.CreatePHI(intt, 2);
+    val->addIncoming(cs_.MakeInt(1), entry);
+    val->addIncoming(cs_.MakeInt(0), checkbool);
+    ra.SetBoolean(val);
+    cs_.B_.CreateBr(exit);
+
+    cs_.B_.SetInsertPoint(assign_by_bool);
+    auto b_bool = rb.GetBoolean();
+    auto not_b = cs_.B_.CreateICmpEQ(b_bool, cs_.MakeInt(0));
+    auto not_b_int = cs_.B_.CreateIntCast(not_b, intt, false);
+    ra.SetBoolean(not_b_int);
+    cs_.B_.CreateBr(exit);
+}
+
+void Compiler::CompileLen() {
     auto& ra = stack_.GetR(GETARG_A(cs_.instr_));
     auto& rkb = stack_.GetRK(GETARG_B(cs_.instr_));
     auto args = {cs_.values_.state, ra.GetTValue(), rkb.GetTValue()};
-    cs_.CreateCall(function, args);
+    cs_.CreateCall("luaV_objlen", args);
     stack_.Update();
 }
 

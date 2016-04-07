@@ -72,6 +72,9 @@ void CompilerState::InitEntryBlock() {
     values_.xnumber = B_.CreateAlloca(tluanumber, nullptr, "xnumber");
     values_.ynumber = B_.CreateAlloca(tluanumber, nullptr, "ynumber");
 
+    auto tluainteger = rt_.GetType("lua_Integer");
+    values_.meminteger = B_.CreateAlloca(tluainteger, nullptr, "meminteger");
+
     auto ttvalue = rt_.GetType("TValue");
     values_.base = B_.CreateAlloca(ttvalue, nullptr, "base");
     UpdateBase();

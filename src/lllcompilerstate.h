@@ -113,6 +113,7 @@ public:
         llvm::Value* base;
         llvm::Value* xnumber;
         llvm::Value* ynumber;
+        llvm::Value* meminteger;
     } values_;
     int curr_;
     Instruction instr_;

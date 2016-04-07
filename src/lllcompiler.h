@@ -61,7 +61,10 @@ private:
     void CompileSettable();
     void CompileNewtable();
     void CompileSelf();
-    void CompileUnop(const std::string& function);
+    void CompileUnm();
+    void CompileBNot();
+    void CompileNot();
+    void CompileLen();
     void CompileConcat();
     void CompileJmp();
     void CompileCmp(const std::string& function);

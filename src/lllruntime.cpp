@@ -59,57 +59,12 @@ static void dumpstack (StkId begin, StkId end) {
 }
 #endif
 
-void LLLGetTable(lua_State* L, TValue* t, TValue* k, TValue* v) {
-    luaV_gettable(L, t, k, v);
-}
-
-void LLLSetTable(lua_State* L, TValue* t, TValue* k, TValue* v) {
-    luaV_settable(L, t, k, v);
-}
-
-int LLLToNumber(const TValue* obj, lua_Number* n) {
-    TValue v;
-    if (cvt2num(obj) && luaO_str2num(svalue(obj), &v) == vslen(obj) + 1) {
-        *n = nvalue(&v);
-        return 1;
-    } else {
-        return 0;
-    }
-}
-
 lua_Number LLLNumMod(lua_Number lhs, lua_Number rhs) {
     lua_Number result;
     luai_nummod(0, lhs, rhs, result);
     return result;
 }
 
-}
-
-static void lll_unm (lua_State *L, TValue *ra, TValue *rb) {
-  lua_Number nb;
-  if (ttisinteger(rb)) {
-    lua_Integer ib = ivalue(rb);
-    setivalue(ra, intop(-, 0, ib));
-  } else if (tonumber(rb, &nb)) {
-    setfltvalue(ra, luai_numunm(L, nb));
-  } else {
-    luaT_trybinTM(L, rb, rb, ra, TM_UNM);
-  }
-}
-
-static void lll_bnot (lua_State *L, TValue *ra, TValue *rb) {
-  lua_Integer ib;
-  if (tointeger(rb, &ib)) {
-    setivalue(ra, intop(^, ~l_castS2U(0), ib));
-  } else {
-    luaT_trybinTM(L, rb, rb, ra, TM_BNOT);
-  }
-}
-
-static void lll_not (lua_State *L, TValue *ra, TValue *rb) {
-  (void)L;
-  int res = l_isfalse(rb);
-  setbvalue(ra, res);
 }
 
 static void lll_checkcg (lua_State *L, CallInfo *ci, TValue *c) {
@@ -338,9 +293,6 @@ void Runtime::InitFunctions() {
         auto funcptr = reinterpret_cast<void*>(function); \
         AddFunction(STRINGFY2(function), type, funcptr); }
 
-    #define LOADUNOP(function) \
-        ADDFUNCTION(function, tvoid, tstate, ttvalue, ttvalue)
-
     auto tstate = types_["lua_State"];
     auto tclosure = types_["LClosure"];
     auto ttvalue = types_["TValue"];
@@ -349,22 +301,16 @@ void Runtime::InitFunctions() {
     auto ttstring = types_["TString"];
     auto tupval = types_["UpVal"];
     auto tluanumber = types_["lua_Number"];
-    auto tluainteger = types_["lua_Integer"];
     auto tluanumberptr = llvm::PointerType::get(tluanumber, 0);
+    auto tluainteger = types_["lua_Integer"];
+    auto tluaintegerptr = llvm::PointerType::get(tluainteger, 0);
     auto tvoid = llvm::Type::getVoidTy(context_);
     auto tint = MakeIntT(sizeof(int));
-    auto tbool = llvm::Type::getInt1Ty(context_);
 
     // LLL
-    ADDFUNCTION(LLLGetTable, tvoid, tstate, ttvalue, ttvalue, ttvalue);
-    ADDFUNCTION(LLLSetTable, tvoid, tstate, ttvalue, ttvalue, ttvalue);
-    ADDFUNCTION(LLLToNumber, tbool, ttvalue, tluanumberptr);
     ADDFUNCTION(LLLNumMod, tluanumber, tluanumber, tluanumber);
 
     // Deprecated lll
-    LOADUNOP(lll_unm);
-    LOADUNOP(lll_bnot);
-    LOADUNOP(lll_not);
     ADDFUNCTION(lll_checkcg, tvoid, tstate, tci, ttvalue);
     ADDFUNCTION(lll_newtable, ttable, tstate, ttvalue);
     ADDFUNCTION(lll_upvalbarrier, tvoid, tstate, tupval);
@@ -399,7 +345,6 @@ void Runtime::InitFunctions() {
     ADDFUNCTION(luaT_trybinTM, tvoid, tstate, ttvalue, ttvalue, ttvalue, tint);
 
     // lvm.h
-    ADDFUNCTION(luaV_tonumber_, tint, ttvalue, tluanumberptr);
     ADDFUNCTION(luaV_concat, tvoid, tstate, tint);
     ADDFUNCTION(luaV_div, tluainteger, tstate, tluainteger, tluainteger);
     ADDFUNCTION(luaV_equalobj, tint, tstate, ttvalue, ttvalue);
@@ -412,6 +357,8 @@ void Runtime::InitFunctions() {
     ADDFUNCTION(luaV_mod, tluainteger, tstate, tluainteger, tluainteger);
     ADDFUNCTION(luaV_objlen, tvoid, tstate, ttvalue, ttvalue)
     ADDFUNCTION(luaV_shiftl, tluainteger, tluainteger, tluainteger);
+    ADDFUNCTION(luaV_tointeger, tint, ttvalue, tluaintegerptr, tint);
+    ADDFUNCTION(luaV_tonumber_, tint, ttvalue, tluanumberptr);
 }
 
 void Runtime::AddStructType(const std::string& name, size_t size) {
