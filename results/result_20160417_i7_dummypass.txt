@@ -1,0 +1,153 @@
+Distro: CentOS release 6.6 (Final)
+Kernel: 2.6.32-504.30.3.el6.x86_64
+CPU:    Intel(R) Core(TM) i7-4770 CPU @ 3.40GHz
+
+Module: benchmarks/floatarith.lua
+Benchmarks:
+             avg        stddev
+Lua:         0.74755	0.01092	(1.46054%)
+LLL:         0.28630	0.00717	(2.50364%)
+LuaJit:      0.13175	0.00332	(2.52188%)
+Compile:     0.00885	0.00198	(22.38225%)
+
+Ratios:
+Lua / LLL:	2.61107230
+LLL / Lua:	0.38298442
+comp / LLL:	0.03091163
+
+--------------------
+
+Module: benchmarks/heapsort.lua
+Benchmarks:
+             avg        stddev
+Lua:         0.72795	0.01083	(1.48723%)
+LLL:         0.35400	0.01079	(3.04936%)
+LuaJit:      0.11200	0.00073	(0.64775%)
+Compile:     0.08110	0.00229	(2.82597%)
+
+Ratios:
+Lua / LLL:	2.05635593
+LLL / Lua:	0.48629714
+comp / LLL:	0.22909605
+
+--------------------
+
+Module: benchmarks/increment.lua
+Benchmarks:
+             avg        stddev
+Lua:         0.76135	0.00225	(0.29608%)
+LLL:         0.18625	0.00229	(1.23022%)
+LuaJit:      0.07940	0.00179	(2.25297%)
+Compile:     0.00920	0.00307	(33.38139%)
+
+Ratios:
+Lua / LLL:	4.08778523
+LLL / Lua:	0.24463125
+comp / LLL:	0.04939597
+
+--------------------
+
+Module: benchmarks/loopsum.lua
+Benchmarks:
+             avg        stddev
+Lua:         0.76195	0.00291	(0.38198%)
+LLL:         0.20480	0.00233	(1.13798%)
+LuaJit:      0.07960	0.00268	(3.37096%)
+Compile:     0.00905	0.00286	(31.55516%)
+
+Ratios:
+Lua / LLL:	3.72045898
+LLL / Lua:	0.26878404
+comp / LLL:	0.04418945
+
+--------------------
+
+Module: benchmarks/mandelbrot.lua
+Benchmarks:
+             avg        stddev
+Lua:         1.08945	0.00246	(0.22577%)
+LLL:         0.56425	0.00595	(1.05536%)
+LuaJit:      0.09110	0.00215	(2.35967%)
+Compile:     0.07380	0.00224	(3.03309%)
+
+Ratios:
+Lua / LLL:	1.93079309
+LLL / Lua:	0.51792189
+comp / LLL:	0.13079309
+
+--------------------
+
+Module: benchmarks/matmul.lua
+Benchmarks:
+             avg        stddev
+Lua:         0.66365	0.01391	(2.09549%)
+LLL:         0.32510	0.00935	(2.87671%)
+LuaJit:      0.05615	0.00264	(4.70396%)
+Compile:     0.07830	0.00283	(3.61467%)
+
+Ratios:
+Lua / LLL:	2.04137189
+LLL / Lua:	0.48986665
+comp / LLL:	0.24084897
+
+--------------------
+
+Module: benchmarks/qt.lua
+Benchmarks:
+             avg        stddev
+Lua:         2.44850	0.01618	(0.66088%)
+LLL:         1.39590	0.01633	(1.16998%)
+LuaJit:      0.61165	0.01000	(1.63516%)
+Compile:     0.29295	0.00369	(1.26019%)
+
+Ratios:
+Lua / LLL:	1.75406548
+LLL / Lua:	0.57010415
+comp / LLL:	0.20986460
+
+--------------------
+
+Module: benchmarks/queen.lua
+Benchmarks:
+             avg        stddev
+Lua:         0.49235	0.00660	(1.34125%)
+LLL:         0.23150	0.00216	(0.93490%)
+LuaJit:      0.04080	0.00221	(5.42839%)
+Compile:     0.03405	0.00039	(1.15722%)
+
+Ratios:
+Lua / LLL:	2.12678186
+LLL / Lua:	0.47019397
+comp / LLL:	0.14708423
+
+--------------------
+
+Module: benchmarks/sieve.lua
+Benchmarks:
+             avg        stddev
+Lua:         1.25915	0.01521	(1.20810%)
+LLL:         0.61400	0.00823	(1.33991%)
+LuaJit:      0.11880	0.01177	(9.90943%)
+Compile:     0.03750	0.00061	(1.61861%)
+
+Ratios:
+Lua / LLL:	2.05073290
+LLL / Lua:	0.48763054
+comp / LLL:	0.06107492
+
+--------------------
+
+Module: benchmarks/sudoku.lua
+Benchmarks:
+             avg        stddev
+Lua:         0.39660	0.00394	(0.99319%)
+LLL:         0.21965	0.00476	(2.16722%)
+LuaJit:      0.04735	0.00059	(1.24001%)
+Compile:     0.46930	0.00602	(1.28242%)
+
+Ratios:
+Lua / LLL:	1.80559982
+LLL / Lua:	0.55383258
+comp / LLL:	2.13658092
+
+--------------------
