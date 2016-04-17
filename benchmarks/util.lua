@@ -6,7 +6,9 @@
 -- matmul.lua
 
 return function(f)
-    lll.setAutoCompileEnable(false)
+    if lll then
+        lll.setAutoCompileEnable(false)
+    end
     if arg[1] == '--lll' then
         assert(lll.compile(f))
         f()
