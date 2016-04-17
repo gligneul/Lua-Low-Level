@@ -1,0 +1,153 @@
+Distro: Fedora release 22 (Twenty Two)
+Kernel: 4.1.10-200.fc22.x86_64
+CPU:    Intel(R) Core(TM) i3-2100 CPU @ 3.10GHz
+
+Module: b/floatarith.lua
+Benchmarks:
+             avg        stddev
+Lua:         1.10415	0.01655	(1.49866%)
+LLL:         0.96370	0.10822	(11.22980%)
+LuaJit:      0.20955	0.02293	(10.94416%)
+Compile:     0.00515	0.00037	(7.11354%)
+
+Ratios:
+Lua / LLL:	1.14574038
+LLL / Lua:	0.87279808
+comp / LLL:	0.00534399
+
+--------------------
+
+Module: b/heapsort.lua
+Benchmarks:
+             avg        stddev
+Lua:         1.43475	0.02730	(1.90285%)
+LLL:         0.79815	0.01564	(1.95974%)
+LuaJit:      0.17305	0.01781	(10.29031%)
+Compile:     0.01815	0.00109	(6.00233%)
+
+Ratios:
+Lua / LLL:	1.79759444
+LLL / Lua:	0.55629901
+comp / LLL:	0.02274009
+
+--------------------
+
+Module: b/increment.lua
+Benchmarks:
+             avg        stddev
+Lua:         1.16270	0.04092	(3.51916%)
+LLL:         0.69580	0.02645	(3.80177%)
+LuaJit:      0.14580	0.02204	(15.11801%)
+Compile:     0.00580	0.00077	(13.23745%)
+
+Ratios:
+Lua / LLL:	1.67102616
+LLL / Lua:	0.59843468
+comp / LLL:	0.00833573
+
+--------------------
+
+Module: b/loopsum.lua
+Benchmarks:
+             avg        stddev
+Lua:         1.11770	0.02584	(2.31224%)
+LLL:         0.69045	0.01641	(2.37636%)
+LuaJit:      0.11560	0.01685	(14.57379%)
+Compile:     0.00515	0.00037	(7.11354%)
+
+Ratios:
+Lua / LLL:	1.61879933
+LLL / Lua:	0.61774179
+comp / LLL:	0.00745890
+
+--------------------
+
+Module: b/mandelbrot.lua
+Benchmarks:
+             avg        stddev
+Lua:         3.07255	0.02365	(0.76978%)
+LLL:         1.25455	0.22496	(17.93138%)
+LuaJit:      0.14095	0.01712	(12.14850%)
+Compile:     0.01365	0.00123	(8.98036%)
+
+Ratios:
+Lua / LLL:	2.44912518
+LLL / Lua:	0.40830906
+comp / LLL:	0.01088040
+
+--------------------
+
+Module: b/matmul.lua
+Benchmarks:
+             avg        stddev
+Lua:         1.18475	0.01487	(1.25490%)
+LLL:         0.89530	0.02832	(3.16337%)
+LuaJit:      0.08195	0.01242	(15.15061%)
+Compile:     0.01005	0.00022	(2.22494%)
+
+Ratios:
+Lua / LLL:	1.32329945
+LLL / Lua:	0.75568685
+comp / LLL:	0.01122529
+
+--------------------
+
+Module: b/qt.lua
+Benchmarks:
+             avg        stddev
+Lua:         4.24950	0.04997	(1.17590%)
+LLL:         2.17135	0.03683	(1.69638%)
+LuaJit:      0.71985	0.02645	(3.67467%)
+Compile:     0.12890	0.01716	(13.31140%)
+
+Ratios:
+Lua / LLL:	1.95707739
+LLL / Lua:	0.51096600
+comp / LLL:	0.05936399
+
+--------------------
+
+Module: b/queen.lua
+Benchmarks:
+             avg        stddev
+Lua:         1.31015	0.01984	(1.51430%)
+LLL:         0.57095	0.04892	(8.56863%)
+LuaJit:      0.07990	0.01392	(17.42707%)
+Compile:     0.01645	0.00261	(15.83682%)
+
+Ratios:
+Lua / LLL:	2.29468430
+LLL / Lua:	0.43578980
+comp / LLL:	0.02881163
+
+--------------------
+
+Module: b/sieve.lua
+Benchmarks:
+             avg        stddev
+Lua:         1.89490	0.05572	(2.94043%)
+LLL:         1.11330	0.02503	(2.24796%)
+LuaJit:      0.17490	0.01772	(10.13136%)
+Compile:     0.01345	0.00185	(13.74645%)
+
+Ratios:
+Lua / LLL:	1.70205695
+LLL / Lua:	0.58752441
+comp / LLL:	0.01208120
+
+--------------------
+
+Module: b/sudoku.lua
+Benchmarks:
+             avg        stddev
+Lua:         0.80970	0.02305	(2.84722%)
+LLL:         0.47200	0.02509	(5.31598%)
+LuaJit:      0.08300	0.01446	(17.42006%)
+Compile:     0.06675	0.01134	(16.99027%)
+
+Ratios:
+Lua / LLL:	1.71546610
+LLL / Lua:	0.58293195
+comp / LLL:	0.14141949
+
+--------------------
