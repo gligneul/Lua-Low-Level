@@ -12,7 +12,10 @@
 
 #include <memory>
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-parameter"
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
+#pragma clang diagnostic pop
 
 namespace lll {
 
