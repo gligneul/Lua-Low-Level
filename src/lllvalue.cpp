@@ -141,7 +141,8 @@ void MutableValue::SetFloat(llvm::Value* fvalue) {
 }
 
 llvm::Value* MutableValue::GetField(Field field) {
-    auto indices = {cs_.MakeInt(0), cs_.MakeInt((int)field)};
+    std::vector<llvm::Value*> indices =
+        {cs_.MakeInt(0), cs_.MakeInt((int)field)};
     auto name = field == VALUE ? "value.ptr" : "tag.ptr";
     return cs_.B_.CreateGEP(GetTValue(), indices, name);
 }

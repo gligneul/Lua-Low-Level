@@ -7,13 +7,13 @@
 # PLAT= none
 PLAT= linux
 
-CC= clang
-CXX= clang++
-LD= clang++
+CC= gcc
+CXX= g++
+LD= g++
 
 #OPT= -O0 -g
-OPT= -O3
-WARNINGS= -Wall -Wextra -Werror -Wno-pedantic
+OPT= -O2
+WARNINGS= -Wall -Wextra -Wno-pedantic
 
 CFLAGS= $(OPT) $(WARNINGS) -DLUA_COMPAT_5_2 $(SYSCFLAGS) $(MYCFLAGS)
 CXXFLAGS= $(OPT) $(WARNINGS) --std=c++11 $(SYSCXXFLAGS) $(MYCXXFLAGS)
@@ -29,10 +29,10 @@ SYSCXXFLAGS=
 SYSLDFLAGS=
 SYSLIBS=
 
-MYCFLAGS= `llvm-config --cflags | sed -e 's/-DNDEBUG//' -e 's/-O.//'`
+MYCFLAGS= 
 MYCXXFLAGS= $(MYCFLAGS)
 MYLDFLAGS= `llvm-config --ldflags`
-MYLIBS= `llvm-config --libs all --system-libs`
+MYLIBS= `llvm-config --libs --system-libs`
 MYOBJS= \
 	lllarith.o \
 	lllcompiler.o \

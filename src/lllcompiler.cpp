@@ -14,15 +14,12 @@
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/Transforms/Scalar.h>
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wunused-parameter"
 #define LLL_USE_MCJIT
 #ifdef LLL_USE_MCJIT
 #include <llvm/ExecutionEngine/MCJIT.h>
 #else
 #include <llvm/ExecutionEngine/JIT.h>
 #endif
-#pragma clang diagnostic pop
 
 #include "lllarith.h"
 #include "lllcompiler.h"

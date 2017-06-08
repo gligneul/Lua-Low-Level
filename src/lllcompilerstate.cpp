@@ -45,12 +45,13 @@ CompilerState::CompilerState(lua_State* L, Proto* proto) :
 
 llvm::Function* CompilerState::CreateMainFunction() {
     auto ret = rt_.MakeIntT(sizeof(int));
-    auto params = {rt_.GetType("lua_State"), rt_.GetType("LClosure")};
+    std::vector<llvm::Type*> params =
+        {rt_.GetType("lua_State"), rt_.GetType("LClosure")};
     auto type = llvm::FunctionType::get(ret, params, false);
     std::stringstream name;
     name << "lll" << static_cast<void*>(proto_);
     return llvm::Function::Create(type, llvm::Function::ExternalLinkage,
-            name.str(), module_.get());
+        name.str(), module_.get());
 }
 
 void CompilerState::InitEntryBlock() {
@@ -119,7 +120,9 @@ void CompilerState::SetField(llvm::Value* strukt, llvm::Value* fieldvalue,
 }
 
 llvm::Value* CompilerState::CreateCall(const std::string& name,
-        std::initializer_list<llvm::Value*> args, const std::string& retname) {
+        std::initializer_list<llvm::Value*> argslist,
+        const std::string& retname) {
+    std::vector<llvm::Value*> args = argslist;
     auto f = rt_.GetFunction(module_.get(), name);
     return B_.CreateCall(f, args, retname);
 }

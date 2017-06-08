@@ -240,7 +240,7 @@ void Runtime::InitTypes() {
     ADDTYPE(Table);
     ADDTYPE(TString);
 
-    auto ttvaluefields = {
+    std::vector<llvm::Type*> ttvaluefields = {
         MakeIntT(sizeof(Value)),
         MakeIntT(sizeof(int)),
         MakeIntT(sizeof(int))
@@ -262,7 +262,8 @@ void Runtime::InitTypes() {
 
 void Runtime::InitFunctions() {
     #define ADDFUNCTION(function, ret, ...) { \
-        auto type = llvm::FunctionType::get(ret, {__VA_ARGS__}, false); \
+        std::vector<llvm::Type*> args = {__VA_ARGS__}; \
+        auto type = llvm::FunctionType::get(ret, args, false); \
         auto funcptr = reinterpret_cast<void*>(function); \
         AddFunction(STRINGFY2(function), type, funcptr); }
 
@@ -334,7 +335,7 @@ void Runtime::InitFunctions() {
 }
 
 void Runtime::AddStructType(const std::string& name, size_t size) {
-    auto memt = {MakeIntT(size)};
+    std::vector<llvm::Type*> memt = {MakeIntT(size)};
     auto structt = llvm::StructType::create(memt, name);
     types_[name] = llvm::PointerType::get(structt, 0);
 }
