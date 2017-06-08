@@ -29,10 +29,12 @@ SYSCXXFLAGS=
 SYSLDFLAGS=
 SYSLIBS=
 
-MYCFLAGS= 
+LLVMCONFIG=llvm-config-64-3.5
+
+MYCFLAGS= -I`$(LLVMCONFIG) --includedir`
 MYCXXFLAGS= $(MYCFLAGS)
-MYLDFLAGS= `llvm-config --ldflags`
-MYLIBS= `llvm-config --libs --system-libs`
+MYLDFLAGS= `$(LLVMCONFIG) --ldflags`
+MYLIBS= `$(LLVMCONFIG) --libs --system-libs`
 MYOBJS= \
 	lllarith.o \
 	lllcompiler.o \
@@ -101,7 +103,7 @@ echo:
 	@echo "PLAT= $(PLAT)"
 	@echo "CC= $(CC)"
 	@echo "CFLAGS= $(CFLAGS)"
-	@echo "LDFLAGS= $(SYSLDFLAGS)"
+	@echo "LDFLAGS= $(LDFLAGS)"
 	@echo "LIBS= $(LIBS)"
 	@echo "AR= $(AR)"
 	@echo "RANLIB= $(RANLIB)"
